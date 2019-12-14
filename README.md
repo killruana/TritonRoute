@@ -49,7 +49,7 @@ $ ./TritonRoute -lef <LEF_FILE> -def <DEF_FILE> -guide <GUIDE_FILE> -output <OUT
 * ISPD-2018 Initial Detailed Routing Contest 
 
 ## Acknowledgement ##
-Special thanks to the anonymous contributers of the new DRC engine and pin access analysis engine.
+Special thanks to the anonymous contributors of the new DRC engine and pin access analysis engine.
 
 ## License ##
 * [BSD 3-clause License](LICENSE) 
