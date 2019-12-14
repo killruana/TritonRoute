@@ -68,10 +68,9 @@ do
   if [ $test_return_code == 0 ];
   then
     echo "     - Test returned GREEN (passed)"
-  elif [ $test_return_code == 1 ];
-  then
-    echo "     - Test return YELLOW (passed)"
+    exit 0
   else
     echo "     - Test returned RED (failed)"
+    exit 1
   fi
 done

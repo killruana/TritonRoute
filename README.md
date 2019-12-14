@@ -48,7 +48,7 @@ $ ./TritonRoute -lef <LEF_FILE> -def <DEF_FILE> -guide <GUIDE_FILE> -output <OUT
 * CLN65LP (with limited selection of standard cells, macros and floorplans)
 * ISPD-2018 Initial Detailed Routing Contest 
 
-## Acknowledgement ##
+## Acknowledgment ##
 Special thanks to the anonymous contributors of the new DRC engine and pin access analysis engine.
 
 ## License ##
