@@ -36,7 +36,6 @@ $ cd TritonRoute
 $ mkdir build
 $ cd build
 $ cmake -DBOOST_ROOT=<BOOST_ROOT> ../
-$ cd ../
 $ make
 ```
    
