@@ -1197,7 +1197,7 @@ void FlexDR::init() {
   //if (VERBOSE > 0) {
   //  cout <<endl <<"init dr objs ..." <<endl;
   //}
-  getRegionQuery()->initDRObj(getTech()->getLayers().size());
+  getRegionQuery()->initDRObj(getTech()->getLayers().size()); // first init in postProcess
   //getRegionQuery()->printDRObj();
 
   init_halfViaEncArea();
@@ -1271,8 +1271,10 @@ void FlexDR::initDR(int size, bool enableDRC) {
     FlexDRWorker worker(this);
     //frBox routeBox;
     //routeBox.set(0*2000, 0*2000, 1*2000, 1*2000);
-    frCoord xl = 63 * 2000;
-    frCoord yl = 84 * 2000;
+    //frCoord xl = 21 * 2000;
+    //frCoord yl = 42 * 2000;
+    frCoord xl = 21 * 2000;
+    frCoord yl = 21 * 2000;
     //frCoord xh = 129 * 2000;
     //frCoord yh = 94.05 * 2000;
     frPoint idx;
@@ -1421,7 +1423,7 @@ void FlexDR::initDR(int size, bool enableDRC) {
         //}
       }
     }
-    checkConnectivity();
+    //checkConnectivity();
   }
 
   //cout <<"  number of violations = " <<numMarkers <<endl;
@@ -1717,7 +1719,38 @@ void FlexDR::reportDRC() {
     ofstream drcRpt(DRC_RPT_FILE.c_str());
     if (drcRpt.is_open()) {
       for (auto &marker: getDesign()->getTopBlock()->getMarkers()) {
-        drcRpt << "  violation type: " << int(marker->getConstraint()->typeId()) << "\n";
+        auto con = marker->getConstraint();
+        drcRpt << "  violation type: ";
+        if (con) {
+          if (con->typeId() == frConstraintTypeEnum::frcShortConstraint) {
+            if (getTech()->getLayer(marker->getLayerNum())->getType() == frLayerTypeEnum::ROUTING) {
+              drcRpt <<"Short";
+            } else if (getTech()->getLayer(marker->getLayerNum())->getType() == frLayerTypeEnum::CUT) {
+              drcRpt <<"CShort";
+            }
+          } else if (con->typeId() == frConstraintTypeEnum::frcMinWidthConstraint) {
+            drcRpt <<"MinWid";
+          } else if (con->typeId() == frConstraintTypeEnum::frcSpacingConstraint) {
+            drcRpt <<"MetSpc";
+          } else if (con->typeId() == frConstraintTypeEnum::frcSpacingEndOfLineConstraint) {
+            drcRpt <<"EOLSpc";
+          } else if (con->typeId() == frConstraintTypeEnum::frcSpacingTablePrlConstraint) {
+            drcRpt <<"MetSpc";
+          } else if (con->typeId() == frConstraintTypeEnum::frcCutSpacingConstraint) {
+            drcRpt <<"CutSpc";
+          } else if (con->typeId() == frConstraintTypeEnum::frcMinStepConstraint) {
+            drcRpt <<"MinStp";
+          } else if (con->typeId() == frConstraintTypeEnum::frcNonSufficientMetalConstraint) {
+            drcRpt <<"NSMet";
+          } else if (con->typeId() == frConstraintTypeEnum::frcSpacingSamenetConstraint) {
+            drcRpt <<"MetSpc";
+          } else {
+            drcRpt << "unknown";
+          }
+        } else {
+          drcRpt << "nullptr";
+        }
+        drcRpt <<endl;
         // get source(s) of violation
         drcRpt << "    srcs: ";
         for (auto src: marker->getSrcs()) {
@@ -1730,12 +1763,25 @@ void FlexDR::reportDRC() {
                 frInstTerm* instTerm = (static_cast<frInstTerm*>(src));
                 // drcRpt << instTerm->getInst()->getName() 
                        // << "/" << instTerm->getTerm()->getName() << " ";
-                drcRpt << "Pin of Cell " << instTerm->getInst()->getName() << " ";
+                //drcRpt << "Pin of Cell " << instTerm->getInst()->getName() << " ";
+                drcRpt <<instTerm->getInst()->getName() <<"/" <<instTerm->getTerm()->getName() << " ";
                 break;
               }
               case frcTerm: {
                 frTerm* term = (static_cast<frTerm*>(src));
-                drcRpt << term->getName() << " ";
+                drcRpt <<"PIN/" << term->getName() << " ";
+                break;
+              }
+              case frcInstBlockage: {
+                frInstBlockage* instBlockage = (static_cast<frInstBlockage*>(src));
+                // drcRpt << instTerm->getInst()->getName() 
+                       // << "/" << instTerm->getTerm()->getName() << " ";
+                //drcRpt << "Blockage of Cell " << instBlockage->getInst()->getName() << " ";
+                drcRpt <<instBlockage->getInst()->getName() <<"/OBS" << " ";
+                break;
+              }
+              case frcBlockage: {
+                drcRpt << "PIN/OBS" << " ";
                 break;
               }
               default:
@@ -1747,9 +1793,14 @@ void FlexDR::reportDRC() {
         // get violation bbox
         frBox bbox;
         marker->getBBox(bbox);
-        drcRpt << "    bbox = (" << bbox.left() / dbu << ", " << bbox.bottom() / dbu << ") - ("
-               << bbox.right() / dbu << ", " << bbox.top() / dbu << ") on Layer " 
-               << getTech()->getLayer(marker->getLayerNum())->getName() << "\n";
+        drcRpt << "    bbox = ( " << bbox.left() / dbu << ", " << bbox.bottom() / dbu << " ) - ( "
+               << bbox.right() / dbu << ", " << bbox.top() / dbu << " ) on Layer ";
+        if (getTech()->getLayer(marker->getLayerNum())->getType() == frLayerTypeEnum::CUT && 
+            marker->getLayerNum() - 1 >= getTech()->getBottomLayerNum()) {
+          drcRpt << getTech()->getLayer(marker->getLayerNum() - 1)->getName() << "\n";
+        } else {
+          drcRpt << getTech()->getLayer(marker->getLayerNum())->getName() << "\n";
+        }
       }
     } else {
       cout << "Error: Fail to open DRC report file\n";
@@ -1803,7 +1854,9 @@ int FlexDR::main() {
   searchRepair(6,  7,  0, 4, DRCCOST, MARKERCOST,  8, 2, true, 0, false, 3); // true search and repair
   end();
   searchRepair(7,  7, -4, 4, DRCCOST, MARKERCOST,  8, 2, true, 0, false, 3); // true search and repair
-  reportDRC();
+  if (DRC_RPT_FILE != string("")) {
+    reportDRC();
+  }
   //time_span_init  = std::chrono::duration<double>(0);
   //time_span_route = std::chrono::duration<double>(0);
   //time_span_end   = std::chrono::duration<double>(0);

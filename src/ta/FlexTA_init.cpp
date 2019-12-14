@@ -94,6 +94,7 @@ void FlexTAWorker::initTracks() {
   }
 }
 
+// use prefAp, otherwise return false
 bool FlexTAWorker::initIroute_helper_pin(frGuide* guide, frCoord &maxBegin, frCoord &minEnd, 
                                          set<frCoord> &downViaCoordSet, set<frCoord> &upViaCoordSet,
                                          int &wlen, frCoord &wlen2) {
@@ -162,33 +163,44 @@ bool FlexTAWorker::initIroute_helper_pin(frGuide* guide, frCoord &maxBegin, frCo
       trueTerm = static_cast<frTerm*>(term);
     }
     if (trueTerm) {
+      int pinIdx = 0;
+      int pinAccessIdx = (inst) ? inst->getPinAccessIdx() : -1;
       for (auto &pin: trueTerm->getPins()) {
-        for (auto &ap: pin->getAccessPatterns(instXform.orient())) {
-          if (hasInst && !(ap->hasInst(inst))) {
-            continue;
-          }
-          frPoint apBp, apEp;
-          ap->getPoints(apBp, apEp);
-          if (enableOutput) {
-            cout <<" (" <<apBp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
-                        <<apBp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") origin";
-          }
-          auto bNum = ap->getBeginLayerNum();
-          apBp.transform(shiftXform);
-          if (layerNum == bNum && getRouteBox().contains(apBp)) {
-            wlen2 = isH ? apBp.y() : apBp.x();
-            maxBegin = isH ? apBp.x() : apBp.y();
-            minEnd   = isH ? apBp.x() : apBp.y();
-            wlen = 0;
-            if (hasDown) {
-              downViaCoordSet.insert(maxBegin);
-            }
-            if (hasUp) {
-              upViaCoordSet.insert(maxBegin);
-            }
-            return true;
-          }
+        frAccessPoint* ap = nullptr;
+        if (inst) {
+          ap = (static_cast<frInstTerm*>(term)->getAccessPoints())[pinIdx];
         }
+        if (!pin->hasPinAccess()) {
+          continue;
+        }
+        if (pinAccessIdx == -1) {
+          continue;
+        }
+        if (ap == nullptr) {
+          continue;
+        }
+        frPoint apBp;
+        ap->getPoint(apBp);
+        if (enableOutput) {
+          cout <<" (" <<apBp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
+                      <<apBp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") origin";
+        }
+        auto bNum = ap->getLayerNum();
+        apBp.transform(shiftXform);
+        if (layerNum == bNum && getRouteBox().contains(apBp)) {
+          wlen2 = isH ? apBp.y() : apBp.x();
+          maxBegin = isH ? apBp.x() : apBp.y();
+          minEnd   = isH ? apBp.x() : apBp.y();
+          wlen = 0;
+          if (hasDown) {
+            downViaCoordSet.insert(maxBegin);
+          }
+          if (hasUp) {
+            upViaCoordSet.insert(maxBegin);
+          }
+          return true;
+        }
+        pinIdx++;
       }
     }
   }
@@ -247,25 +259,38 @@ void FlexTAWorker::initIroute_helper_generic_helper(frGuide* guide, frCoord &wle
       trueTerm = static_cast<frTerm*>(term);
     }
     if (trueTerm) {
+      int pinIdx = 0;
+      int pinAccessIdx = (inst) ? inst->getPinAccessIdx() : -1;
       for (auto &pin: trueTerm->getPins()) {
-        for (auto &ap: pin->getAccessPatterns(instXform.orient())) {
-          if (hasInst && !(ap->hasInst(inst))) {
-            continue;
-          }
-          frPoint apBp, apEp;
-          ap->getPoints(apBp, apEp);
-          if (enableOutput) {
-            cout <<" (" <<apBp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
-                        <<apBp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") origin";
-          }
-          apBp.transform(shiftXform);
-          if (getRouteBox().contains(apBp)) {
-            wlen2 = isH ? apBp.y() : apBp.x();
-            return;
-          }
+        frAccessPoint* ap = nullptr;
+        if (inst) {
+          ap = (static_cast<frInstTerm*>(term)->getAccessPoints())[pinIdx];
         }
+        if (!pin->hasPinAccess()) {
+          continue;
+        }
+        if (pinAccessIdx == -1) {
+          continue;
+        }
+        if (ap == nullptr) {
+          continue;
+        }
+        frPoint apBp;
+        ap->getPoint(apBp);
+        if (enableOutput) {
+          cout <<" (" <<apBp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
+                      <<apBp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") origin";
+        }
+        apBp.transform(shiftXform);
+        if (getRouteBox().contains(apBp)) {
+          wlen2 = isH ? apBp.y() : apBp.x();
+          return;
+        }
+        pinIdx++;
       }
     }
+    ; // to do @@@@@
+    wlen2 = 0;
   }
 }
 

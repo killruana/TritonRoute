@@ -35,7 +35,7 @@
 #include "db/drObj/drMarker.h"
 #include "dr/FlexGridGraph.h"
 #include "dr/FlexWavefront.h"
-#include "drc/frDRC.h"
+//#include "drc/frDRC.h"
 
 namespace fr {
 
@@ -222,7 +222,7 @@ namespace fr {
                  pinCnt(0), initNumMarkers(0),
                  apSVia(), fixedObjs(), planarHistoryMarkers(), viaHistoryMarkers(), 
                  historyMarkers(std::vector<std::set<FlexMazeIdx> >(3)),
-                 nets(), gridGraph(drIn->getDesign(), this), markers(), rq(this), drcWorker(drIn->getDesign()) {}
+                 nets(), owner2nets(), gridGraph(drIn->getDesign(), this), markers(), rq(this)/*, drcWorker(drIn->getDesign())*/ {}
     // setters
     void setRouteBox(const frBox &boxIn) {
       routeBox.set(boxIn);
@@ -285,6 +285,17 @@ namespace fr {
       markers.clear();
       frBox box;
       for (auto &marker: in) {
+        marker.getBBox(box);
+        if (getDrcBox().overlaps(box)) {
+          markers.push_back(marker);
+        }
+      }
+    }
+    void setMarkers(const std::vector<std::unique_ptr<frMarker> > &in) {
+      markers.clear();
+      frBox box;
+      for (auto &uMarker: in) {
+        auto &marker = *uMarker;
         marker.getBBox(box);
         if (getDrcBox().overlaps(box)) {
           markers.push_back(marker);
@@ -381,6 +392,14 @@ namespace fr {
     std::vector<std::unique_ptr<drNet> >& getNets() {
       return nets;
     }
+    const std::vector<drNet*>* getDRNets(frNet* net) const {
+      auto it = owner2nets.find(net);
+      if (it != owner2nets.end()) {
+        return &(it->second);
+      } else {
+        return nullptr;
+      }
+    }
     const std::vector<frMarker>& getMarkers() const {
       return markers;
     }
@@ -441,6 +460,7 @@ namespace fr {
 
     // local storage
     std::vector<std::unique_ptr<drNet> >    nets;
+    std::map<frNet*, std::vector<drNet*> >  owner2nets;
     FlexGridGraph                           gridGraph;
     //std::vector<std::unique_ptr<frMarker> > markers;
     std::vector<frMarker>                   markers;
@@ -448,7 +468,7 @@ namespace fr {
     FlexDRWorkerRegionQuery                 rq;
 
     // persistent drc worker
-    DRCWorker                               drcWorker;
+    //DRCWorker                               drcWorker;
 
     // init
     void init();
@@ -516,8 +536,11 @@ namespace fr {
                  std::vector<std::unique_ptr<drConnFig> > &extObjs,
                  std::vector<frRect> &origGuides,
                  std::vector<frBlockObject*> &terms);
-    void initNet_term(drNet* dNet, std::vector<frBlockObject*> &terms);
-    void initNet_termGenAp(drPin* dPin);
+    //void initNet_term(drNet* dNet, std::vector<frBlockObject*> &terms);
+    void initNet_term_new(drNet* dNet, std::vector<frBlockObject*> &terms);
+    //void initNet_termGenAp(drPin* dPin);
+    void initNet_termGenAp_new(drPin* dPin);
+    void initNet_addNet(std::unique_ptr<drNet> &in);
     void getTrackLocs(bool isHorzTracks, frLayerNum currLayerNum, frCoord low, frCoord high, std::set<frCoord> &trackLocs);
     void initNet_boundary(drNet* net, std::vector<std::unique_ptr<drConnFig> > &extObjs);
     void initNets_regionQuery();

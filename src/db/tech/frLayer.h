@@ -43,9 +43,16 @@ namespace fr {
   public:
     friend class io::Parser;
     // constructor
-    frLayer(): pitch(0), width(0), defaultViaDef(nullptr), minSpc(nullptr), shortConstraint(nullptr), areaConstraint(nullptr), minStepConstraint(nullptr) {}
+    frLayer(): pitch(0), width(0), defaultViaDef(nullptr), minSpc(nullptr), spacingSamenet(nullptr), 
+               eols(), cutConstraints(), cutSpacingSamenetConstraints(),
+               shortConstraint(nullptr), 
+               nonSufficientMetalConstraint(nullptr), areaConstraint(nullptr), minStepConstraint(nullptr), minWidthConstraint(nullptr),
+               minimumcutConstraints() {}
     frLayer(frLayerNum layerNumIn, const frString &nameIn): layerNum(layerNumIn), name(nameIn), pitch(0), width(0), minWidth(-1), defaultViaDef(nullptr),
-                                                            minSpc(nullptr), shortConstraint(nullptr), areaConstraint(nullptr), minStepConstraint(nullptr),
+                                                            minSpc(nullptr), spacingSamenet(nullptr), eols(),
+                                                            cutConstraints(), cutSpacingSamenetConstraints(),
+                                                            shortConstraint(nullptr), nonSufficientMetalConstraint(nullptr),
+                                                            areaConstraint(nullptr), minStepConstraint(nullptr),
                                                             minWidthConstraint(nullptr), minimumcutConstraints() {}
     // setters
     void setLayerNum(frLayerNum layerNumIn) {
@@ -198,6 +205,15 @@ namespace fr {
       }
       minSpc = in;
     }
+    bool hasSpacingSamenet() const {
+      return (spacingSamenet);
+    }
+    frSpacingSamenetConstraint* getSpacingSamenet() const {
+      return spacingSamenet;
+    }
+    void setSpacingSamenet(frSpacingSamenetConstraint* in) {
+      spacingSamenet = in;
+    }
     bool hasEolSpacing() const {
       return (eols.empty() ? false : true);
     }
@@ -211,25 +227,51 @@ namespace fr {
       return eols;
     }
     void addCutConstraint(frCutSpacingConstraint* in) {
-      cutConstraints.push_back(in);
+      if (in->hasSameNet()) {
+        cutSpacingSamenetConstraints.push_back(in);
+      } else {
+        cutConstraints.push_back(in);
+      }
     }
-    const std::vector<frCutSpacingConstraint*>& getCutConstraint() const {
-      return cutConstraints;
+    const std::vector<frCutSpacingConstraint*>& getCutConstraint(bool samenet = false) const {
+      if (samenet) {
+        return cutSpacingSamenetConstraints;
+      } else {
+        return cutConstraints;
+      }
     }
-    const std::vector<frCutSpacingConstraint*>& getCutSpacing() const {
-      return cutConstraints;
+    const std::vector<frCutSpacingConstraint*>& getCutSpacing(bool samenet = false) const {
+      if (samenet) {
+        return cutSpacingSamenetConstraints;
+      } else {
+        return cutConstraints;
+      }
     }
-    std::vector<frCutSpacingConstraint*>& getCutSpacing() {
-      return cutConstraints;
+    std::vector<frCutSpacingConstraint*>& getCutSpacing(bool samenet = false) {
+      if (samenet) {
+        return cutSpacingSamenetConstraints;
+      } else {
+        return cutConstraints;
+      }
     }
-    bool hasCutSpacing() const {
-      return (!cutConstraints.empty());
+    bool hasCutSpacing(bool samenet = false) const {
+      if (samenet) {
+        return (!cutSpacingSamenetConstraints.empty());
+      } else {
+        return (!cutConstraints.empty());
+      }
     }
     void setShortConstraint(frShortConstraint* in) {
       shortConstraint = in;
     }
     frShortConstraint* getShortConstraint() {
       return shortConstraint;
+    }
+    void setNonSufficientMetalConstraint(frNonSufficientMetalConstraint* in) {
+      nonSufficientMetalConstraint = in;
+    }
+    frNonSufficientMetalConstraint* getNonSufficientMetalConstraint() {
+      return nonSufficientMetalConstraint;
     }
     void setAreaConstraint(frAreaConstraint* in) {
       areaConstraint = in;
@@ -276,9 +318,12 @@ namespace fr {
     frCollection<std::weak_ptr<frLef58CutSpacingConstraint> >       lef58CutSpacingConstraints;
     frCollection<std::weak_ptr<frLef58SpacingEndOfLineConstraint> > lef58SpacingEndOfLineConstraints;
     frConstraint*                                                   minSpc;
+    frSpacingSamenetConstraint*                                     spacingSamenet;
     std::vector<frSpacingEndOfLineConstraint*>                      eols;
     std::vector<frCutSpacingConstraint*>                            cutConstraints;
+    std::vector<frCutSpacingConstraint*>                            cutSpacingSamenetConstraints;
     frShortConstraint*                                              shortConstraint;
+    frNonSufficientMetalConstraint*                                 nonSufficientMetalConstraint;
     frAreaConstraint*                                               areaConstraint;
     frMinStepConstraint*                                            minStepConstraint;
     frMinWidthConstraint*                                           minWidthConstraint;

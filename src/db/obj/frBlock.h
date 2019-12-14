@@ -335,6 +335,9 @@ namespace fr {
         blockages.push_back(std::move(blk));
       }
     }
+    void addBlockage(std::unique_ptr<frBlockage> &in) {
+      blockages.push_back(std::move(in));
+    }
     void setCMap(const frCMap &cIn) {
       cMap = cIn;
     }

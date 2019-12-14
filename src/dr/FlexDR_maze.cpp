@@ -27,7 +27,8 @@
  */
 
 #include "dr/FlexDR.h"
-#include "drc/frDRC.h"
+//#include "drc/frDRC.h"
+#include "gc/FlexGC.h"
 #include <chrono>
 #include <algorithm>
 #include <random>
@@ -1634,30 +1635,61 @@ void FlexDRWorker::mazeNetEnd(drNet* net) {
 }
 
 void FlexDRWorker::route_drc() {
-  DRCWorker drcWorker(getDesign(), fixedObjs);
-  drcWorker.addDRNets(nets);
+  //DRCWorker drcWorker(getDesign(), fixedObjs);
+  //drcWorker.addDRNets(nets);
   using namespace std::chrono;
-  high_resolution_clock::time_point t0 = high_resolution_clock::now();
-  drcWorker.init();
-  high_resolution_clock::time_point t1 = high_resolution_clock::now();
-  drcWorker.setup();
-  high_resolution_clock::time_point t2 = high_resolution_clock::now();
+  //high_resolution_clock::time_point t0 = high_resolution_clock::now();
+  //drcWorker.init();
+  //high_resolution_clock::time_point t1 = high_resolution_clock::now();
+  //drcWorker.setup();
+  //high_resolution_clock::time_point t2 = high_resolution_clock::now();
+  //// drcWorker.main();
+  //drcWorker.check();
+  ////setMarkers(drcWorker.getViolations());
+  //high_resolution_clock::time_point t3 = high_resolution_clock::now();
+  ////drcWorker.report();
+  //
+  //duration<double> time_span0 = duration_cast<duration<double>>(t1 - t0);
+
+  //duration<double> time_span1 = duration_cast<duration<double>>(t2 - t1);
+
+  //duration<double> time_span2 = duration_cast<duration<double>>(t3 - t2);
+  //if (VERBOSE > 1) {
+  //  stringstream ss;
+  //  ss   <<"DRC  (INIT/SETUP/MAIN) " <<time_span0.count() <<" " 
+  //                                  <<time_span1.count() <<" "
+  //                                  <<time_span2.count() <<" "
+  //                                  <<endl;
+  //  //ss <<"#viol = " <<markers.size() <<endl;
+  //  ss <<"#viol(DRC) = " <<drcWorker.getViolations().size() <<endl;
+  //  cout <<ss.str() <<flush;
+  //}
+
+  // new gcWorker
+  FlexGCWorker gcWorker(getDesign(), this);
+  gcWorker.setExtBox(getExtBox());
+  gcWorker.setDrcBox(getDrcBox());
+  high_resolution_clock::time_point t0x = high_resolution_clock::now();
+  gcWorker.init();
+  high_resolution_clock::time_point t1x = high_resolution_clock::now();
+  gcWorker.main();
+  high_resolution_clock::time_point t2x = high_resolution_clock::now();
   // drcWorker.main();
-  drcWorker.check();
-  setMarkers(drcWorker.getViolations());
-  high_resolution_clock::time_point t3 = high_resolution_clock::now();
+  gcWorker.end();
+  setMarkers(gcWorker.getMarkers());
+  high_resolution_clock::time_point t3x = high_resolution_clock::now();
   //drcWorker.report();
   
-  duration<double> time_span0 = duration_cast<duration<double>>(t1 - t0);
+  duration<double> time_span0x = duration_cast<duration<double>>(t1x - t0x);
 
-  duration<double> time_span1 = duration_cast<duration<double>>(t2 - t1);
+  duration<double> time_span1x = duration_cast<duration<double>>(t2x - t1x);
 
-  duration<double> time_span2 = duration_cast<duration<double>>(t3 - t2);
+  duration<double> time_span2x = duration_cast<duration<double>>(t3x - t2x);
   if (VERBOSE > 1) {
     stringstream ss;
-    ss   <<"DRC  (INIT/SETUP/MAIN) " <<time_span0.count() <<" " 
-                                    <<time_span1.count() <<" "
-                                    <<time_span2.count() <<" "
+    ss   <<"GC  (INIT/MAIN/END) "   <<time_span0x.count() <<" " 
+                                    <<time_span1x.count() <<" "
+                                    <<time_span2x.count() <<" "
                                     <<endl;
     ss <<"#viol = " <<markers.size() <<endl;
     cout <<ss.str() <<flush;
@@ -1738,11 +1770,11 @@ bool FlexDRWorker::route_2_x2_addHistoryCost(const frMarker &marker) {
       }
       fixable = true;
       // skip if curr is irrelavant spacing violation
-      if (marker.hasDir() && marker.isH() && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
-        continue;
-      } else if (marker.hasDir() && !marker.isH() && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
-        continue;
-      }
+      //if (marker.hasDir() && marker.isH() && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
+      //  continue;
+      //} else if (marker.hasDir() && !marker.isH() && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
+      //  continue;
+      //}
       // add history cost
       // get points to mark up, markup up to "width" grid points to the left and right of pathseg
       obj->getStyle(segStyle);
@@ -1777,11 +1809,11 @@ bool FlexDRWorker::route_2_x2_addHistoryCost(const frMarker &marker) {
       }
       fixable = true;
       // skip if curr is irrelavant spacing violation
-      if (marker.hasDir() && marker.isH() && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
-        continue;
-      } else if (marker.hasDir() && !marker.isH() && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
-        continue;
-      }
+      //if (marker.hasDir() && marker.isH() && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
+      //  continue;
+      //} else if (marker.hasDir() && !marker.isH() && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
+      //  continue;
+      //}
       // add history cost
       obj->getMazeIdx(objMIdx1, objMIdx2);
       gridGraph.addMarkerCostVia(objMIdx1.x(), objMIdx1.y(), objMIdx1.z());
@@ -1871,6 +1903,7 @@ void FlexDRWorker::route_2_x2_ripupNets(const frMarker &marker, drNet* net) {
   }
 }
 
+/*
 void FlexDRWorker::route_2_x2(drNet* net, deque<drNet*> &rerouteNets) {
   bool enableOutput = true;
   for (auto &net: nets) {
@@ -1914,7 +1947,9 @@ void FlexDRWorker::route_2_x2(drNet* net, deque<drNet*> &rerouteNets) {
     }
   }
 }
+*/
 
+/*
 void FlexDRWorker::route_2_x1(drNet* net, deque<drNet*> &rerouteNets) {
   bool enableOutput = true;
   drcWorker.updateDRNet(net);
@@ -1926,7 +1961,9 @@ void FlexDRWorker::route_2_x1(drNet* net, deque<drNet*> &rerouteNets) {
   }
 
 }
+*/
 
+/*
 void FlexDRWorker::route_2() {
   bool enableOutput = true;
   //bool enableOutput = false;
@@ -1987,7 +2024,7 @@ void FlexDRWorker::route_2() {
       bool isRouted = routeNet(net);
       if (isRouted == false) {
         // TODO: output maze area
-        cout << "Fatal error: Maze Route cannot find path. Connectivity Changed.\n";
+        cout << "Fatal error: Maze Route cannot find path (" << net->getFrNet()->getName() << "). Connectivity Changed.\n";
         if (OUT_MAZE_FILE != string("")) {
           gridGraph.print();
         }
@@ -2010,6 +2047,7 @@ void FlexDRWorker::route_2() {
     setBestMarkers();
   }
 }
+*/
 
 void FlexDRWorker::route() {
   //bool enableOutput = true;
@@ -2021,31 +2059,58 @@ void FlexDRWorker::route() {
     return;
   }
   if (DRCTEST) {
-    DRCWorker drcWorker(getDesign(), fixedObjs);
-    drcWorker.addDRNets(nets);
+    //DRCWorker drcWorker(getDesign(), fixedObjs);
+    //drcWorker.addDRNets(nets);
     using namespace std::chrono;
-    high_resolution_clock::time_point t0 = high_resolution_clock::now();
-    drcWorker.init();
-    high_resolution_clock::time_point t1 = high_resolution_clock::now();
-    drcWorker.setup();
-    high_resolution_clock::time_point t2 = high_resolution_clock::now();
+    //high_resolution_clock::time_point t0 = high_resolution_clock::now();
+    //drcWorker.init();
+    //high_resolution_clock::time_point t1 = high_resolution_clock::now();
+    //drcWorker.setup();
+    //high_resolution_clock::time_point t2 = high_resolution_clock::now();
+    //// drcWorker.main();
+    //drcWorker.check();
+    //high_resolution_clock::time_point t3 = high_resolution_clock::now();
+    //drcWorker.report();
+    //
+    //duration<double> time_span0 = duration_cast<duration<double>>(t1 - t0);
+
+    //duration<double> time_span1 = duration_cast<duration<double>>(t2 - t1);
+
+    //duration<double> time_span2 = duration_cast<duration<double>>(t3 - t2);
+    //stringstream ss;
+    //ss   <<"time (INIT/SETUP/MAIN) " <<time_span0.count() <<" " 
+    //                                 <<time_span1.count() <<" "
+    //                                 <<time_span2.count() <<" "
+    //                                 <<endl;
+    //cout <<ss.str() <<flush;
+    FlexGCWorker gcWorker(getDesign(), this);
+    gcWorker.setExtBox(getExtBox());
+    gcWorker.setDrcBox(getDrcBox());
+    high_resolution_clock::time_point t0x = high_resolution_clock::now();
+    gcWorker.init();
+    high_resolution_clock::time_point t1x = high_resolution_clock::now();
+    gcWorker.main();
+    high_resolution_clock::time_point t2x = high_resolution_clock::now();
     // drcWorker.main();
-    drcWorker.check();
-    high_resolution_clock::time_point t3 = high_resolution_clock::now();
-    drcWorker.report();
+    gcWorker.end();
+    setMarkers(gcWorker.getMarkers());
+    high_resolution_clock::time_point t3x = high_resolution_clock::now();
+    //drcWorker.report();
     
-    duration<double> time_span0 = duration_cast<duration<double>>(t1 - t0);
+    duration<double> time_span0x = duration_cast<duration<double>>(t1x - t0x);
 
-    duration<double> time_span1 = duration_cast<duration<double>>(t2 - t1);
+    duration<double> time_span1x = duration_cast<duration<double>>(t2x - t1x);
 
-    duration<double> time_span2 = duration_cast<duration<double>>(t3 - t2);
-    stringstream ss;
-    ss   <<"time (INIT/SETUP/MAIN) " <<time_span0.count() <<" " 
-                                     <<time_span1.count() <<" "
-                                     <<time_span2.count() <<" "
-                                     <<endl;
-    cout <<ss.str() <<flush;
-
+    duration<double> time_span2x = duration_cast<duration<double>>(t3x - t2x);
+    if (VERBOSE > 1) {
+      stringstream ss;
+      ss   <<"GC  (INIT/MAIN/END) "   <<time_span0x.count() <<" " 
+                                      <<time_span1x.count() <<" "
+                                      <<time_span2x.count() <<" "
+                                      <<endl;
+      ss <<"#viol = " <<markers.size() <<endl;
+      cout <<ss.str() <<flush;
+    }
 
   } else {
     vector<drNet*> rerouteNets;
@@ -2068,7 +2133,7 @@ void FlexDRWorker::route() {
         bool isRouted = routeNet(net);
         if (isRouted == false) {
           // TODO: output maze area
-          cout << "Fatal error: Maze Route cannot find path. Connectivity Changed.\n";
+          cout << "Fatal error: Maze Route cannot find path (" << net->getFrNet()->getName() << "). Connectivity Changed.\n";
           if (OUT_MAZE_FILE != string("")) {
             gridGraph.print();
           }

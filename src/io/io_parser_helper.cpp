@@ -415,9 +415,10 @@ void io::Parser::postProcess() {
   cout <<endl <<"init region query ..." <<endl;
   design->getRegionQuery()->init(design->getTech()->getLayers().size());
   design->getRegionQuery()->print();
+  design->getRegionQuery()->initDRObj(design->getTech()->getLayers().size()); // second init from FlexDR.cpp
   // test
   /*
-  frBox box(372500, 1765500, 375500, 1768500);
+  frBox box(207.4045*2000, 256.2600*2000, 207.4045*2000, 256.2600*2000);
   for (frLayerNum i = 0; i < (int)design->getTech()->getLayers().size(); i++) {
     vector<rq_rptr_value_t<frBlockObject> > result;
     design->getRegionQuery()->query(box, i, result);
@@ -432,8 +433,8 @@ void io::Parser::postProcess() {
              <<static_cast<frInstTerm*>(rptr)->getTerm()->getName() <<endl;
       } else if (rptr->typeId() == frcTerm) {
         cout <<"     term PIN/" <<static_cast<frTerm*>(rptr)->getName() <<endl;
-      } else if (rptr->typeId() == frcLayerBlockage) {
-        cout <<"     lblk" <<endl;
+      } else if (rptr->typeId() == frcInstBlockage) {
+        cout <<"     inst blk" <<endl;
       } else if (rptr->typeId() == frcPathSeg) {
         cout <<"     pseg ";
         if (static_cast<frPathSeg*>(rptr)->hasNet()) {
@@ -450,7 +451,9 @@ void io::Parser::postProcess() {
         cout <<"Error: unknown type in rq test" <<endl;
       }
     }
-  }*/
+  }
+  exit(1);
+  */
 }
 
 void io::Parser::postProcessGuide() {

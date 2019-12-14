@@ -200,6 +200,9 @@ namespace fr {
     valClass findMin() const {
       return vals.front().front();
     }
+    valClass findMax() const {
+      return vals.back().back();
+    }
 
     // debug
     void printTbl() const {

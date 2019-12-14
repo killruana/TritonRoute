@@ -1,0 +1,1027 @@
+/* Authors: Lutong Wang and Bangqi Xu */
+/*
+ * Copyright (c) 2019, The Regents of the University of California
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of the University nor the
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE REGENTS BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include <iostream>
+#include "gc/FlexGC.h"
+
+using namespace std;
+using namespace fr;
+
+void FlexGCWorker::myBloat(const gtl::rectangle_data<frCoord> &rect, frCoord val, box_t &box) {
+  bg::set<bg::min_corner, 0>(box, gtl::xl(rect) - val);
+  bg::set<bg::min_corner, 1>(box, gtl::yl(rect) - val);
+  bg::set<bg::max_corner, 0>(box, gtl::xh(rect) + val);
+  bg::set<bg::max_corner, 1>(box, gtl::yh(rect) + val);
+}
+
+frCoord FlexGCWorker::checkMetalSpacing_getMaxSpcVal(frLayerNum layerNum) {
+  frCoord maxSpcVal = 0;
+  auto currLayer = getDesign()->getTech()->getLayer(layerNum);
+  if (currLayer->hasMinSpacing()) {
+    auto con = currLayer->getMinSpacing();
+    switch (con->typeId()) {
+      case frConstraintTypeEnum::frcSpacingConstraint:
+        maxSpcVal = static_cast<frSpacingConstraint*>(con)->getMinSpacing();
+        break;
+      case frConstraintTypeEnum::frcSpacingTablePrlConstraint:
+        maxSpcVal = static_cast<frSpacingTablePrlConstraint*>(con)->findMax();
+        break;
+      default:
+        std::cout << "Warning: Unsupported metSpc rule\n";
+    }
+  }
+  return maxSpcVal;
+}
+
+frCoord FlexGCWorker::checkMetalSpacing_prl_getReqSpcVal(gcRect* rect1, gcRect* rect2, frCoord prl) {
+  auto layerNum = rect1->getLayerNum();
+  frCoord reqSpcVal = 0;
+  auto currLayer = getDesign()->getTech()->getLayer(layerNum);
+  bool isObs = false;
+  if (rect1->getNet()->getOwner() && 
+      (rect1->getNet()->getOwner()->typeId() == frcInstBlockage || rect1->getNet()->getOwner()->typeId() == frcBlockage)) {
+    isObs = true;
+  }
+  if (rect2->getNet()->getOwner() && 
+      (rect2->getNet()->getOwner()->typeId() == frcInstBlockage || rect2->getNet()->getOwner()->typeId() == frcBlockage)) {
+    isObs = true;
+  }
+  if (currLayer->hasMinSpacing()) {
+    auto con = currLayer->getMinSpacing();
+    switch (con->typeId()) {
+      //case frConstraintTypeEnum::frcSpacingConstraint:
+      //  reqSpcVal = static_cast<frSpacingConstraint*>(con)->getMinSpacing();
+      //  break;
+      case frConstraintTypeEnum::frcSpacingTablePrlConstraint:
+        reqSpcVal = static_cast<frSpacingTablePrlConstraint*>(con)->find(std::max(rect1->width(), rect2->width()), prl);
+        if (USEMINSPACING_OBS && isObs) {
+          reqSpcVal = static_cast<frSpacingTablePrlConstraint*>(con)->findMin();
+        } else if (rect1->getNet() == rect2->getNet()) {
+          if (currLayer->hasSpacingSamenet()) {
+            auto conSamenet = currLayer->getSpacingSamenet();
+            if (!conSamenet->hasPGonly()) {
+              reqSpcVal = std::max(conSamenet->getMinSpacing(), static_cast<frSpacingTablePrlConstraint*>(con)->findMin());
+            } else {
+              bool isPG = false;
+              auto owner = rect1->getNet()->getOwner();
+              if (owner->typeId() == frcNet) {
+                if (static_cast<frNet*>(owner)->getType() == frNetEnum::frcPowerNet || 
+                    static_cast<frNet*>(owner)->getType() == frNetEnum::frcGroundNet) {
+                  isPG = true;
+                }
+              } else if (owner->typeId() == frcInstTerm) {
+                if (static_cast<frInstTerm*>(owner)->getTerm()->getType() == frTermEnum::frcPowerTerm || 
+                    static_cast<frInstTerm*>(owner)->getTerm()->getType() == frTermEnum::frcGroundTerm) {
+                  isPG = true;
+                }
+              } else if (owner->typeId() == frcTerm) {
+                if (static_cast<frTerm*>(owner)->getType() == frTermEnum::frcPowerTerm || 
+                    static_cast<frTerm*>(owner)->getType() == frTermEnum::frcGroundTerm) {
+                  isPG = true;
+                }
+              }
+              if (isPG) {
+                reqSpcVal = std::max(conSamenet->getMinSpacing(), static_cast<frSpacingTablePrlConstraint*>(con)->findMin());
+              }
+            }
+          }
+        }
+        break;
+      default:
+        std::cout << "Warning: Unsupported metSpc rule\n";
+    }
+  }
+  return reqSpcVal;
+}
+
+void FlexGCWorker::checkMetalSpacing_prl(gcRect* rect1, gcRect* rect2, const gtl::rectangle_data<frCoord> &markerRect,
+                                     frCoord prl, frCoord distSquare) {
+  bool enableOutput = true;
+
+  auto layerNum = rect1->getLayerNum();
+  auto net1 = rect1->getNet();
+  auto net2 = rect2->getNet();
+  auto reqSpcVal = checkMetalSpacing_prl_getReqSpcVal(rect1, rect2, prl);
+  // no violation if spacing satisfied
+  if (distSquare >= reqSpcVal * reqSpcVal) {
+    return;
+  }
+  // no violation if fixed shapes
+  if (rect1->isFixed() && rect2->isFixed()) {
+    return;
+  }
+  // no violation if covered by shapes of the two nets
+  auto &workerRegionQuery = getWorkerRegionQuery();
+  vector<rq_rptr_value_t<gcRect> > result;
+  box_t queryBox(point_t(gtl::xl(markerRect), gtl::yl(markerRect)), 
+                 point_t(gtl::xh(markerRect), gtl::yh(markerRect)));
+  workerRegionQuery.queryMaxRectangle(queryBox, layerNum, result);
+  for (auto &[objBox, objPtr]: result) {
+    if ((objPtr->getNet() == net1 || objPtr->getNet() == net2) && bg::covered_by(queryBox, objBox)) {
+      return;
+    }
+  }
+  // no violation if bloat width cannot find route shapes
+  {
+    using namespace boost::polygon::operators;
+    auto width = std::max(rect1->width(), rect2->width());
+    gtl::rectangle_data<frCoord> enlargedMarkerRect(markerRect);
+    gtl::bloat(enlargedMarkerRect, width);
+    auto &polys1 = net1->getPolygons(layerNum, false);
+    auto intersection_polys1 = polys1 & enlargedMarkerRect;
+    auto &polys2 = net2->getPolygons(layerNum, false);
+    auto intersection_polys2 = polys2 & enlargedMarkerRect;
+    if (gtl::empty(intersection_polys1) && gtl::empty(intersection_polys2)) {
+      return;
+    }
+  }
+
+  auto marker = make_unique<frMarker>();
+  frBox box(gtl::xl(markerRect), gtl::yl(markerRect), gtl::xh(markerRect), gtl::yh(markerRect));
+  marker->setBBox(box);
+  marker->setLayerNum(layerNum);
+  marker->setConstraint(getDesign()->getTech()->getLayer(layerNum)->getMinSpacing());
+  marker->addSrc(net1->getOwner());
+  marker->addSrc(net2->getOwner());
+  if (addMarker(marker)) {
+    // true marker
+    if (enableOutput) {
+      double dbu = getDesign()->getTopBlock()->getDBUPerUU();
+      cout <<"metSpc@(" <<gtl::xl(markerRect) / dbu <<", " <<gtl::yl(markerRect) / dbu <<") ("
+                        <<gtl::xh(markerRect) / dbu <<", " <<gtl::yh(markerRect) / dbu <<") "
+           <<getDesign()->getTech()->getLayer(layerNum)->getName() <<" ";
+      auto owner = net1->getOwner();
+      if (owner == nullptr) {
+        cout <<"FLOATING";
+      } else {
+        if (owner->typeId() == frcNet) {
+          cout <<static_cast<frNet*>(owner)->getName();
+        } else if (owner->typeId() == frcInstTerm) {
+          cout <<static_cast<frInstTerm*>(owner)->getInst()->getName() <<"/" 
+               <<static_cast<frInstTerm*>(owner)->getTerm()->getName();
+        } else if (owner->typeId() == frcTerm) {
+          cout <<"PIN/" <<static_cast<frTerm*>(owner)->getName();
+        } else if (owner->typeId() == frcInstBlockage) {
+          cout <<static_cast<frInstBlockage*>(owner)->getInst()->getName() <<"/OBS";
+        } else if (owner->typeId() == frcBlockage) {
+          cout <<"PIN/OBS";
+        } else {
+          cout <<"UNKNOWN";
+        }
+      }
+      cout <<" ";
+      owner = net2->getOwner();
+      if (owner == nullptr) {
+        cout <<"FLOATING";
+      } else {
+        if (owner->typeId() == frcNet) {
+          cout <<static_cast<frNet*>(owner)->getName();
+        } else if (owner->typeId() == frcInstTerm) {
+          cout <<static_cast<frInstTerm*>(owner)->getInst()->getName() <<"/" 
+               <<static_cast<frInstTerm*>(owner)->getTerm()->getName();
+        } else if (owner->typeId() == frcTerm) {
+          cout <<"PIN/" <<static_cast<frTerm*>(owner)->getName();
+        } else if (owner->typeId() == frcInstBlockage) {
+          cout <<static_cast<frInstBlockage*>(owner)->getInst()->getName() <<"/OBS";
+        } else if (owner->typeId() == frcBlockage) {
+          cout <<"PIN/OBS";
+        } else {
+          cout <<"UNKNOWN";
+        }
+      }
+      cout <<endl;
+    }
+  }
+}
+
+void FlexGCWorker::checkMetalSpacing_short(gcRect* rect1, gcRect* rect2, const gtl::rectangle_data<frCoord> &markerRect) {
+  bool enableOutput = true;
+
+  auto layerNum = rect1->getLayerNum();
+  auto net1 = rect1->getNet();
+  auto net2 = rect2->getNet();
+  // skip fixed shape
+  if (rect1->isFixed() && rect2->isFixed()) {
+    return;
+  }
+  // skip same-net sufficient metal
+  if (net1 == net2) {
+    auto minWidth = getDesign()->getTech()->getLayer(layerNum)->getMinWidth();
+    auto xLen = gtl::delta(markerRect, gtl::HORIZONTAL);
+    auto yLen = gtl::delta(markerRect, gtl::VERTICAL);
+    if (xLen * xLen + yLen * yLen >= minWidth * minWidth) {
+      return;
+    }
+  }
+  // skip if marker area does not have route shape
+  {
+    using namespace boost::polygon::operators;
+    auto &polys1 = net1->getPolygons(layerNum, false);
+    auto intersection_polys1 = polys1 & markerRect;
+    auto &polys2 = net2->getPolygons(layerNum, false);
+    auto intersection_polys2 = polys2 & markerRect;
+    if (gtl::empty(intersection_polys1) && gtl::empty(intersection_polys2)) {
+      return;
+    }
+  }
+
+  auto marker = make_unique<frMarker>();
+  frBox box(gtl::xl(markerRect), gtl::yl(markerRect), gtl::xh(markerRect), gtl::yh(markerRect));
+  marker->setBBox(box);
+  marker->setLayerNum(layerNum);
+  if (net1 == net2) {
+    marker->setConstraint(getDesign()->getTech()->getLayer(layerNum)->getNonSufficientMetalConstraint());
+  } else {
+    marker->setConstraint(getDesign()->getTech()->getLayer(layerNum)->getShortConstraint());
+  }
+  marker->addSrc(net1->getOwner());
+  marker->addSrc(net2->getOwner());
+  if (addMarker(marker)) {
+    // true marker
+    if (enableOutput) {
+      double dbu = getDesign()->getTopBlock()->getDBUPerUU();
+      if (net1 == net2) {
+        cout <<"NSMetal@(";
+      } else {
+        cout <<"Short@(";
+      }
+      cout <<gtl::xl(markerRect) / dbu <<", " <<gtl::yl(markerRect) / dbu <<") ("
+           <<gtl::xh(markerRect) / dbu <<", " <<gtl::yh(markerRect) / dbu <<") "
+           <<getDesign()->getTech()->getLayer(layerNum)->getName() <<" ";
+      auto owner = net1->getOwner();
+      if (owner == nullptr) {
+        cout <<"FLOATING";
+      } else {
+        if (owner->typeId() == frcNet) {
+          cout <<static_cast<frNet*>(owner)->getName();
+        } else if (owner->typeId() == frcInstTerm) {
+          cout <<static_cast<frInstTerm*>(owner)->getInst()->getName() <<"/" 
+               <<static_cast<frInstTerm*>(owner)->getTerm()->getName();
+        } else if (owner->typeId() == frcTerm) {
+          cout <<"PIN/" <<static_cast<frTerm*>(owner)->getName();
+        } else if (owner->typeId() == frcInstBlockage) {
+          cout <<static_cast<frInstBlockage*>(owner)->getInst()->getName() <<"/OBS";
+        } else if (owner->typeId() == frcBlockage) {
+          cout <<"PIN/OBS";
+        } else {
+          cout <<"UNKNOWN";
+        }
+      }
+      cout <<" ";
+      owner = net2->getOwner();
+      if (owner == nullptr) {
+        cout <<"FLOATING";
+      } else {
+        if (owner->typeId() == frcNet) {
+          cout <<static_cast<frNet*>(owner)->getName();
+        } else if (owner->typeId() == frcInstTerm) {
+          cout <<static_cast<frInstTerm*>(owner)->getInst()->getName() <<"/" 
+               <<static_cast<frInstTerm*>(owner)->getTerm()->getName();
+        } else if (owner->typeId() == frcTerm) {
+          cout <<"PIN/" <<static_cast<frTerm*>(owner)->getName();
+        } else if (owner->typeId() == frcInstBlockage) {
+          cout <<static_cast<frInstBlockage*>(owner)->getInst()->getName() <<"/OBS";
+        } else if (owner->typeId() == frcBlockage) {
+          cout <<"PIN/OBS";
+        } else {
+          cout <<"UNKNOWN";
+        }
+      }
+      cout <<endl;
+    }
+  }
+}
+
+void FlexGCWorker::checkMetalSpacing_main(gcRect* ptr1, gcRect* ptr2) {
+  //bool enableOutput = true;
+
+  // NSMetal does not need self-intersection
+  // Minimum width rule handles outsite this function
+  if (ptr1 == ptr2) {
+    return;
+  }
+  //auto layerNum = ptr1->getLayerNum();
+  //auto net1 = ptr1->getNet();
+  //auto net2 = ptr2->getNet();
+
+  gtl::rectangle_data<frCoord> markerRect(*ptr1);
+  auto distX = gtl::euclidean_distance(markerRect, *ptr2, gtl::HORIZONTAL);
+  auto distY = gtl::euclidean_distance(markerRect, *ptr2, gtl::VERTICAL);
+
+  gtl::generalized_intersect(markerRect, *ptr2);
+  auto prlX = gtl::delta(markerRect, gtl::HORIZONTAL);
+  auto prlY = gtl::delta(markerRect, gtl::VERTICAL);
+
+  if (distX) {
+    prlX = -prlX;
+  }
+  if (distY) {
+    prlY = -prlY;
+  }
+  //// x spacing
+  //if (distX > 0 && distY == 0) {
+  //  checkMetalPrl_prl(ptr1, ptr2, markerRect, prlY, distX * distX);
+  //// y spacing
+  //} else if (distX == 0 && distY > 0) {
+  //  checkMetalPrl_prl(ptr1, ptr2, markerRect, prlX, distY * distY);
+  //// diag spacing
+  //} else if (distX > 0 && distY > 0) {
+  //  checkMetalPrl_prl(ptr1, ptr2, markerRect, std::max(prlX, prlY), distX * distX + distY * distY);
+  //// short, nsmetal
+  //} else {
+  //  ;
+  //}
+  
+  // short, nsmetal
+  if (distX == 0 && distY == 0) {
+    checkMetalSpacing_short(ptr1, ptr2, markerRect);
+  // prl
+  } else {
+    checkMetalSpacing_prl(ptr1, ptr2, markerRect, std::max(prlX, prlY), distX * distX + distY * distY);
+  }
+}
+
+
+
+void FlexGCWorker::checkMetalSpacing_main(gcRect* rect) {
+  //bool enableOutput = true;
+  bool enableOutput = false;
+
+  auto layerNum = rect->getLayerNum();
+  auto maxSpcVal = checkMetalSpacing_getMaxSpcVal(layerNum);
+  box_t queryBox;
+  myBloat(*rect, maxSpcVal, queryBox);
+  if (enableOutput) {
+    double dbu = getDesign()->getTopBlock()->getDBUPerUU();
+    cout <<"checkMetalPrl maxRect ";
+    if (rect->isFixed()) {
+      cout <<"FIXED";
+    } else {
+      cout <<"ROUTE";
+    }
+    cout <<" (" <<gtl::xl(*rect) / dbu <<", " <<gtl::yl(*rect) / dbu <<") (" 
+                <<gtl::xh(*rect) / dbu <<", " <<gtl::yh(*rect) / dbu <<") "
+         <<getDesign()->getTech()->getLayer(layerNum)->getName() <<" ";
+    cout <<"bloat maxSpcVal@" <<maxSpcVal / dbu <<" (" <<queryBox.min_corner().x() / dbu <<", " <<queryBox.min_corner().x() / dbu <<") (" 
+                      <<queryBox.max_corner().x() / dbu <<", " <<queryBox.max_corner().x() / dbu <<") ";
+    auto owner = rect->getNet()->getOwner();
+    if (owner == nullptr) {
+      cout <<" FLOATING";
+    } else {
+      if (owner->typeId() == frcNet) {
+        cout <<static_cast<frNet*>(owner)->getName();
+      } else if (owner->typeId() == frcInstTerm) {
+        cout <<static_cast<frInstTerm*>(owner)->getInst()->getName() <<"/" 
+             <<static_cast<frInstTerm*>(owner)->getTerm()->getName();
+      } else if (owner->typeId() == frcTerm) {
+        cout <<"PIN/" <<static_cast<frTerm*>(owner)->getName();
+      } else if (owner->typeId() == frcInstBlockage) {
+        cout <<static_cast<frInstBlockage*>(owner)->getInst()->getName() <<"/OBS";
+      } else if (owner->typeId() == frcBlockage) {
+        cout <<"PIN/OBS";
+      } else {
+        cout <<"UNKNOWN";
+      }
+    }
+    cout <<endl;
+  }
+
+  auto &workerRegionQuery = getWorkerRegionQuery();
+  vector<rq_rptr_value_t<gcRect> > result;
+  workerRegionQuery.queryMaxRectangle(queryBox, layerNum, result);
+  // Short, metSpc, NSMetal here
+  for (auto &[objBox, ptr]: result) {
+    //cout <<"from " <<rect <<" to " <<ptr <<endl;
+    checkMetalSpacing_main(rect, ptr);
+  }
+}
+
+void FlexGCWorker::checkMetalSpacing() {
+  if (targetNet) {
+    // layer --> net --> polygon --> maxrect
+    for (int i = std::max((frLayerNum)(getDesign()->getTech()->getBottomLayerNum()), minLayerNum); 
+         i <= std::min((frLayerNum)(getDesign()->getTech()->getTopLayerNum()), maxLayerNum); i++) {
+      auto currLayer = getDesign()->getTech()->getLayer(i);
+      if (currLayer->getType() != frLayerTypeEnum::ROUTING) {
+        continue;
+      }
+      for (auto &pin: targetNet->getPins(i)) {
+        for (auto &maxrect: pin->getMaxRectangles()) {
+          checkMetalSpacing_main(maxrect.get());
+        }
+      }
+    }
+  } else {
+    // layer --> net --> polygon --> maxrect
+    for (int i = std::max((frLayerNum)(getDesign()->getTech()->getBottomLayerNum()), minLayerNum); 
+         i <= std::min((frLayerNum)(getDesign()->getTech()->getTopLayerNum()), maxLayerNum); i++) {
+      auto currLayer = getDesign()->getTech()->getLayer(i);
+      if (currLayer->getType() != frLayerTypeEnum::ROUTING) {
+        continue;
+      }
+      for (auto &net: getNets()) {
+        for (auto &pin: net->getPins(i)) {
+          for (auto &maxrect: pin->getMaxRectangles()) {
+            // Short, NSMetal, metSpc
+            //cout <<"from " <<maxrect.get() <<endl;
+            checkMetalSpacing_main(maxrect.get());
+          }
+        }
+      }
+    }
+  }
+}
+
+void FlexGCWorker::checkMetalShape_minWidth(const gtl::rectangle_data<frCoord> &rect, frLayerNum layerNum, gcNet* net, bool isH) {
+  bool enableOutput = true;
+  // skip enough width
+  auto minWidth = getDesign()->getTech()->getLayer(layerNum)->getMinWidth();
+  auto xLen = gtl::delta(rect, gtl::HORIZONTAL);
+  auto yLen = gtl::delta(rect, gtl::VERTICAL);
+  if (isH && xLen >= minWidth) {
+    return;
+  }
+  if (!isH && yLen >= minWidth) {
+    return;
+  }
+  // only show marker if fixed area < marker area
+  {
+    using namespace boost::polygon::operators;
+    auto &fixedPolys = net->getPolygons(layerNum, true);
+    auto intersection_fixedPolys = fixedPolys & rect;
+    if (gtl::area(intersection_fixedPolys) == gtl::area(rect)) {
+      return;
+    }
+  }
+  
+  auto marker = make_unique<frMarker>();
+  frBox box(gtl::xl(rect), gtl::yl(rect), gtl::xh(rect), gtl::yh(rect));
+  marker->setBBox(box);
+  marker->setLayerNum(layerNum);
+  marker->setConstraint(getDesign()->getTech()->getLayer(layerNum)->getMinWidthConstraint());
+  marker->addSrc(net->getOwner());
+  if (addMarker(marker)) {
+    // true marker
+    if (enableOutput) {
+      double dbu = getDesign()->getTopBlock()->getDBUPerUU();
+      cout <<"MinWid@(";
+      cout <<gtl::xl(rect) / dbu <<", " <<gtl::yl(rect) / dbu <<") ("
+           <<gtl::xh(rect) / dbu <<", " <<gtl::yh(rect) / dbu <<") "
+           <<getDesign()->getTech()->getLayer(layerNum)->getName() <<" ";
+      auto owner = net->getOwner();
+      if (owner == nullptr) {
+        cout <<"FLOATING";
+      } else {
+        if (owner->typeId() == frcNet) {
+          cout <<static_cast<frNet*>(owner)->getName();
+        } else if (owner->typeId() == frcInstTerm) {
+          cout <<static_cast<frInstTerm*>(owner)->getInst()->getName() <<"/" 
+               <<static_cast<frInstTerm*>(owner)->getTerm()->getName();
+        } else if (owner->typeId() == frcTerm) {
+          cout <<"PIN/" <<static_cast<frTerm*>(owner)->getName();
+        } else if (owner->typeId() == frcInstBlockage) {
+          cout <<static_cast<frInstBlockage*>(owner)->getInst()->getName() <<"/OBS";
+        } else if (owner->typeId() == frcBlockage) {
+          cout <<"PIN/OBS";
+        } else {
+          cout <<"UNKNOWN";
+        }
+      }
+      cout <<endl;
+    }
+  }
+}
+
+void FlexGCWorker::checkMetalShape_minStep_helper(const frBox &markerBox, frLayerNum layerNum, gcNet* net, 
+                                                  frMinStepConstraint* con,
+                                                  bool hasInsideCorner, bool hasOutsideCorner, bool hasStep, 
+                                                  int currEdges, frCoord currLength, bool hasRoute) {
+  bool enableOutput = true;
+  // skip if no edge
+  if (currEdges == 0) {
+    return;
+  }
+  // skip if no route
+  if (!hasRoute) {
+    return;
+  }
+
+  if (con->hasMinstepType()) {
+    // skip if no corner or step
+    switch(con->getMinstepType()) {
+      case frMinstepTypeEnum::INSIDECORNER:
+        if (!hasInsideCorner) {
+          return;
+        }
+        break;
+      case frMinstepTypeEnum::OUTSIDECORNER:
+        if (!hasOutsideCorner) {
+          return;
+        }
+        break;
+      case frMinstepTypeEnum::STEP:
+        if (!hasStep) {
+          return;
+        }
+        break;
+      default:
+        ;
+    }
+    // skip if <= maxlength
+    if (currLength <= con->getMaxLength()) {
+      return;
+    }
+  } else if (con->hasMaxEdges()) {
+    // skip if <= maxedges
+    if (currEdges <= con->getMaxEdges()) {
+      return;
+    }
+  }
+
+  // true marker
+  auto marker = make_unique<frMarker>();
+  marker->setBBox(markerBox);
+  marker->setLayerNum(layerNum);
+  marker->setConstraint(con);
+  marker->addSrc(net->getOwner());
+  if (addMarker(marker)) {
+    // true marker
+    if (enableOutput) {
+      double dbu = getDesign()->getTopBlock()->getDBUPerUU();
+      cout <<"MinStp@(";
+      cout <<markerBox.left()  / dbu <<", " <<markerBox.bottom() / dbu <<") ("
+           <<markerBox.right() / dbu <<", " <<markerBox.top()    / dbu <<") "
+           <<getDesign()->getTech()->getLayer(layerNum)->getName() <<" ";
+      auto owner = net->getOwner();
+      if (owner == nullptr) {
+        cout <<"FLOATING";
+      } else {
+        if (owner->typeId() == frcNet) {
+          cout <<static_cast<frNet*>(owner)->getName();
+        } else if (owner->typeId() == frcInstTerm) {
+          cout <<static_cast<frInstTerm*>(owner)->getInst()->getName() <<"/" 
+               <<static_cast<frInstTerm*>(owner)->getTerm()->getName();
+        } else if (owner->typeId() == frcTerm) {
+          cout <<"PIN/" <<static_cast<frTerm*>(owner)->getName();
+        } else if (owner->typeId() == frcInstBlockage) {
+          cout <<static_cast<frInstBlockage*>(owner)->getInst()->getName() <<"/OBS";
+        } else if (owner->typeId() == frcBlockage) {
+          cout <<"PIN/OBS";
+        } else {
+          cout <<"UNKNOWN";
+        }
+      }
+      cout <<endl;
+    }
+  }
+}
+
+void FlexGCWorker::checkMetalShape_minStep(gcPin* pin) {
+  //bool enableOutput = true;
+
+  auto poly = pin->getPolygon();
+  auto layerNum = poly->getLayerNum();
+  auto net = poly->getNet();
+
+  auto con = design->getTech()->getLayer(layerNum)->getMinStepConstraint();
+
+  if (!con) {
+    return;
+  }
+
+  gcSegment* be = nullptr;
+  int currEdges = 0;
+  int currLength = 0;
+  bool hasRoute = false;
+  frCoord llx = 0;
+  frCoord lly = 0;
+  frCoord urx = 0;
+  frCoord ury = 0;
+  frBox markerBox;
+  bool hasInsideCorner = false;
+  bool hasOutsideCorner = false;
+  bool hasStep = false;
+  auto minStepLength = con->getMinStepLength();
+  // wrong, what if first edge is short......
+  for (auto &edges: pin->getPolygonEdges()) {
+    be = nullptr;
+    for (auto &edge: edges) {
+      if (gtl::length(*edge) < minStepLength) {
+        currEdges++;
+        currLength += gtl::length(*edge);
+        hasRoute = hasRoute || (edge->isFixed() ? false : true);
+        llx = std::min(llx, edge->high().x());
+        lly = std::min(lly, edge->high().y());
+        urx = std::max(urx, edge->high().x());
+        ury = std::max(ury, edge->high().y());
+      } else {
+        if (be && edge.get() != be) {
+          // be and ee found, check rule here
+          hasRoute = hasRoute || (edge->isFixed() ? false : true);
+          markerBox.set(llx, lly, urx, ury);
+          checkMetalShape_minStep_helper(markerBox, layerNum, net, con, hasInsideCorner, hasOutsideCorner, hasStep, 
+                                         currEdges, currLength, hasRoute);
+        }
+        be = edge.get();
+        currEdges = 0;
+        currLength = 0;
+        hasRoute = edge->isFixed() ? false : true;
+        hasInsideCorner = false;
+        hasOutsideCorner = false;
+        hasStep = false;
+        llx = edge->high().x();
+        lly = edge->high().y();
+        urx = edge->high().x();
+        ury = edge->high().y();
+      }
+    }
+  }
+}
+
+void FlexGCWorker::checkMetalShape_main(gcPin* pin) {
+  //bool enableOutput = true;
+
+  auto poly = pin->getPolygon();
+  auto layerNum = poly->getLayerNum();
+  auto net = poly->getNet();
+
+  // min width
+  vector<gtl::rectangle_data<frCoord> > rects;
+  gtl::polygon_90_set_data<frCoord> polySet;
+  {
+    using namespace boost::polygon::operators;
+    polySet += *poly;
+  }
+  polySet.get_rectangles(rects, gtl::HORIZONTAL);
+  for (auto &rect: rects) {
+    checkMetalShape_minWidth(rect, layerNum, net, true);
+  }
+  rects.clear();
+  polySet.get_rectangles(rects, gtl::VERTICAL);
+  for (auto &rect: rects) {
+    checkMetalShape_minWidth(rect, layerNum, net, false);
+  }
+
+  // min step
+  checkMetalShape_minStep(pin);
+}
+
+void FlexGCWorker::checkMetalShape() {
+  if (targetNet) {
+    // layer --> net --> polygon
+    for (int i = std::max((frLayerNum)(getDesign()->getTech()->getBottomLayerNum()), minLayerNum); 
+         i <= std::min((frLayerNum)(getDesign()->getTech()->getTopLayerNum()), maxLayerNum); i++) {
+      auto currLayer = getDesign()->getTech()->getLayer(i);
+      if (currLayer->getType() != frLayerTypeEnum::ROUTING) {
+        continue;
+      }
+      for (auto &pin: targetNet->getPins(i)) {
+        checkMetalShape_main(pin.get());
+      }
+    }
+  } else {
+    // layer --> net --> polygon
+    for (int i = std::max((frLayerNum)(getDesign()->getTech()->getBottomLayerNum()), minLayerNum); 
+         i <= std::min((frLayerNum)(getDesign()->getTech()->getTopLayerNum()), maxLayerNum); i++) {
+      auto currLayer = getDesign()->getTech()->getLayer(i);
+      if (currLayer->getType() != frLayerTypeEnum::ROUTING) {
+        continue;
+      }
+      for (auto &net: getNets()) {
+        for (auto &pin: net->getPins(i)) {
+          checkMetalShape_main(pin.get());
+        }
+      }
+    }
+  }
+}
+
+bool FlexGCWorker::checkMetalEndOfLine_eol_isEolEdge(gcSegment *edge, frSpacingEndOfLineConstraint *con) {
+  // skip if >= eolWidth
+  if (gtl::length(*edge) >= con->getEolWidth()) {
+    return false;
+  }
+  // skip if non convex edge
+  auto prevEdge = edge->getPrevEdge();
+  auto nextEdge = edge->getNextEdge();
+  // using gtl default generation of hole polygon from polyset, 1 means convex
+  //if (gtl::orientation(*prevEdge, *edge) == 1 && gtl::orientation(*edge, *nextEdge) == 1) {
+  //  double dbu = getDesign()->getTopBlock()->getDBUPerUU();
+  //  cout <<"both 1 (" <<prevEdge->low().x()  / dbu <<", " <<prevEdge->low().y()  / dbu <<") --> ("
+  //                    <<edge->low().x()      / dbu <<", " <<edge->low().y()      / dbu <<") --> ("
+  //                    <<nextEdge->low().x()  / dbu <<", " <<nextEdge->low().y()  / dbu <<") --> ("
+  //                    <<nextEdge->high().x() / dbu <<", " <<nextEdge->high().y() / dbu <<") "
+  //                    <<getDesign()->getTech()->getLayer(edge->getLayerNum())->getName() <<endl;
+  //}
+  //if (gtl::orientation(*prevEdge, *edge) == -1 && gtl::orientation(*edge, *nextEdge) == -1) {
+  //  double dbu = getDesign()->getTopBlock()->getDBUPerUU();
+  //  cout <<"both -1 (" <<prevEdge->low().x() / dbu <<", " <<prevEdge->low().y()  / dbu <<") --> ("
+  //                    <<edge->low().x()      / dbu <<", " <<edge->low().y()      / dbu <<") --> ("
+  //                    <<nextEdge->low().x()  / dbu <<", " <<nextEdge->low().y()  / dbu <<") --> ("
+  //                    <<nextEdge->high().x() / dbu <<", " <<nextEdge->high().y() / dbu <<") "
+  //                    <<getDesign()->getTech()->getLayer(edge->getLayerNum())->getName() <<endl;
+  //}
+  if (!(gtl::orientation(*prevEdge, *edge) == 1 && gtl::orientation(*edge, *nextEdge) == 1)) {
+    return false;
+  }
+  return true;
+}
+
+// bbox on the gcSegment->low() side
+void FlexGCWorker::checkMetalEndOfLine_eol_hasParallelEdge_oneDir_getQueryBox(gcSegment *edge, frSpacingEndOfLineConstraint *con, 
+                                                                              bool isSegLow, box_t &queryBox, 
+                                                                              gtl::rectangle_data<frCoord> &queryRect) {
+  frCoord ptX, ptY;
+  auto eolWithin = con->getEolWithin();
+  auto parWithin = con->getParWithin();
+  auto parSpace  = con->getParSpace();
+  if (isSegLow) {
+    ptX = edge->low().x();
+    ptY = edge->low().y();
+    if (edge->getDir() == frDirEnum::E) {
+      bg::set<bg::min_corner, 0>(queryBox, ptX - parSpace);
+      bg::set<bg::min_corner, 1>(queryBox, ptY - eolWithin);
+      bg::set<bg::max_corner, 0>(queryBox, ptX);
+      bg::set<bg::max_corner, 1>(queryBox, ptY + parWithin);
+    } else if (edge->getDir() == frDirEnum::W) {
+      bg::set<bg::min_corner, 0>(queryBox, ptX);
+      bg::set<bg::min_corner, 1>(queryBox, ptY - parWithin);
+      bg::set<bg::max_corner, 0>(queryBox, ptX + parSpace);
+      bg::set<bg::max_corner, 1>(queryBox, ptY + eolWithin);
+    } else if (edge->getDir() == frDirEnum::N) {
+      bg::set<bg::min_corner, 0>(queryBox, ptX - parWithin);
+      bg::set<bg::min_corner, 1>(queryBox, ptY - parSpace);
+      bg::set<bg::max_corner, 0>(queryBox, ptX + eolWithin);
+      bg::set<bg::max_corner, 1>(queryBox, ptY);
+    } else { // S
+      bg::set<bg::min_corner, 0>(queryBox, ptX - eolWithin);
+      bg::set<bg::min_corner, 1>(queryBox, ptY);
+      bg::set<bg::max_corner, 0>(queryBox, ptX + parWithin);
+      bg::set<bg::max_corner, 1>(queryBox, ptY + parSpace);
+    }
+  } else {
+    ptX = edge->high().x();
+    ptY = edge->high().y();
+    if (edge->getDir() == frDirEnum::E) {
+      bg::set<bg::min_corner, 0>(queryBox, ptX);
+      bg::set<bg::min_corner, 1>(queryBox, ptY - eolWithin);
+      bg::set<bg::max_corner, 0>(queryBox, ptX + parSpace);
+      bg::set<bg::max_corner, 1>(queryBox, ptY + parWithin);
+    } else if (edge->getDir() == frDirEnum::W) {
+      bg::set<bg::min_corner, 0>(queryBox, ptX - parSpace);
+      bg::set<bg::min_corner, 1>(queryBox, ptY - parWithin);
+      bg::set<bg::max_corner, 0>(queryBox, ptX);
+      bg::set<bg::max_corner, 1>(queryBox, ptY + eolWithin);
+    } else if (edge->getDir() == frDirEnum::N) {
+      bg::set<bg::min_corner, 0>(queryBox, ptX - parWithin);
+      bg::set<bg::min_corner, 1>(queryBox, ptY);
+      bg::set<bg::max_corner, 0>(queryBox, ptX + eolWithin);
+      bg::set<bg::max_corner, 1>(queryBox, ptY + parSpace);
+    } else { // S
+      bg::set<bg::min_corner, 0>(queryBox, ptX - eolWithin);
+      bg::set<bg::min_corner, 1>(queryBox, ptY - parSpace);
+      bg::set<bg::max_corner, 0>(queryBox, ptX + parWithin);
+      bg::set<bg::max_corner, 1>(queryBox, ptY);
+    }
+  }
+  gtl::xl(queryRect, queryBox.min_corner().x());
+  gtl::yl(queryRect, queryBox.min_corner().y());
+  gtl::xh(queryRect, queryBox.max_corner().x());
+  gtl::yh(queryRect, queryBox.max_corner().y());
+}
+
+void FlexGCWorker::checkMetalEndOfLine_eol_hasParallelEdge_oneDir_getParallelEdgeRect(gcSegment *edge, gtl::rectangle_data<frCoord> &rect) {
+  if (edge->getDir() == frDirEnum::E) {
+    gtl::xl(rect, edge->low().x());
+    gtl::yl(rect, edge->low().y());
+    gtl::xh(rect, edge->high().x());
+    gtl::yh(rect, edge->high().y() + 1);
+  } else if (edge->getDir() == frDirEnum::W) {
+    gtl::xl(rect, edge->high().x());
+    gtl::yl(rect, edge->high().y() - 1);
+    gtl::xh(rect, edge->low().x());
+    gtl::yh(rect, edge->low().y());
+  } else if (edge->getDir() == frDirEnum::N) {
+    gtl::xl(rect, edge->low().x() - 1);
+    gtl::yl(rect, edge->low().y());
+    gtl::xh(rect, edge->high().x());
+    gtl::yh(rect, edge->high().y());
+  } else { // S
+    gtl::xl(rect, edge->high().x());
+    gtl::yl(rect, edge->high().y());
+    gtl::xh(rect, edge->low().x() + 1);
+    gtl::yh(rect, edge->low().y());
+  }
+}
+
+
+bool FlexGCWorker::checkMetalEndOfLine_eol_hasParallelEdge_oneDir(gcSegment *edge, frSpacingEndOfLineConstraint *con, bool isSegLow, bool &hasRoute) {
+  bool sol = false;
+  box_t queryBox;
+  gtl::rectangle_data<frCoord> queryRect;
+  checkMetalEndOfLine_eol_hasParallelEdge_oneDir_getQueryBox(edge, con, isSegLow, queryBox, queryRect);
+  gtl::rectangle_data<frCoord> triggerRect;
+
+  vector<pair<segment_t, gcSegment*> > results;
+  auto &workerRegionQuery = getWorkerRegionQuery();
+  workerRegionQuery.queryPolygonEdge(queryBox, edge->getLayerNum(), results);
+  for (auto &[boostSeg, ptr]: results) {
+    // skip if non oppo-dir parallel edge
+    if (isSegLow) {
+      if (gtl::orientation(*ptr, *edge) != -1) {
+        continue;
+      }
+    } else {
+      if (gtl::orientation(*edge, *ptr) != -1) {
+        continue;
+      }
+    }
+    checkMetalEndOfLine_eol_hasParallelEdge_oneDir_getParallelEdgeRect(ptr, triggerRect);
+    // skip if no area
+    if (!gtl::intersects(queryRect, triggerRect, false)) {
+      continue;
+    }
+    if (!ptr->isFixed()) {
+      hasRoute = true;
+    }
+    sol = true;
+    return sol;
+  }
+  return sol;
+}
+
+bool FlexGCWorker::checkMetalEndOfLine_eol_hasParallelEdge(gcSegment *edge, frSpacingEndOfLineConstraint *con, bool &hasRoute) {
+  if (!con->hasParallelEdge()) {
+    return true;
+  }
+  bool left  = checkMetalEndOfLine_eol_hasParallelEdge_oneDir(edge, con, true, hasRoute);
+  bool right = checkMetalEndOfLine_eol_hasParallelEdge_oneDir(edge, con, false, hasRoute);
+  if ((!con->hasTwoEdges()) && (left || right)) {
+    return true;
+  }
+  if (con->hasTwoEdges() && left && right) {
+    return true;
+  }
+  return false;
+}
+
+void FlexGCWorker::checkMetalEndOfLine_eol_hasEol_getQueryBox(gcSegment *edge, frSpacingEndOfLineConstraint *con, 
+                                                              box_t &queryBox, gtl::rectangle_data<frCoord> &queryRect) {
+  auto eolWithin = con->getEolWithin();
+  auto eolSpace  = con->getEolSpace();
+  if (edge->getDir() == frDirEnum::E) {
+    bg::set<bg::min_corner, 0>(queryBox, edge->low().x()  - eolWithin);
+    bg::set<bg::min_corner, 1>(queryBox, edge->low().y()  - eolSpace);
+    bg::set<bg::max_corner, 0>(queryBox, edge->high().x() + eolWithin);
+    bg::set<bg::max_corner, 1>(queryBox, edge->high().y());
+  } else if (edge->getDir() == frDirEnum::W) {
+    bg::set<bg::min_corner, 0>(queryBox, edge->high().x() - eolWithin);
+    bg::set<bg::min_corner, 1>(queryBox, edge->high().y());
+    bg::set<bg::max_corner, 0>(queryBox, edge->low().x()  + eolWithin);
+    bg::set<bg::max_corner, 1>(queryBox, edge->low().y()  + eolSpace);
+  } else if (edge->getDir() == frDirEnum::N) {
+    bg::set<bg::min_corner, 0>(queryBox, edge->low().x());
+    bg::set<bg::min_corner, 1>(queryBox, edge->low().y()  - eolWithin);
+    bg::set<bg::max_corner, 0>(queryBox, edge->high().x() + eolSpace);
+    bg::set<bg::max_corner, 1>(queryBox, edge->high().y() + eolWithin);
+  } else { // S
+    bg::set<bg::min_corner, 0>(queryBox, edge->high().x() - eolSpace);
+    bg::set<bg::min_corner, 1>(queryBox, edge->high().y() - eolWithin);
+    bg::set<bg::max_corner, 0>(queryBox, edge->low().x());
+    bg::set<bg::max_corner, 1>(queryBox, edge->low().y()  + eolWithin);
+  }
+  gtl::xl(queryRect, queryBox.min_corner().x());
+  gtl::yl(queryRect, queryBox.min_corner().y());
+  gtl::xh(queryRect, queryBox.max_corner().x());
+  gtl::yh(queryRect, queryBox.max_corner().y());
+}
+
+bool FlexGCWorker::checkMetalEndOfLine_eol_hasEol(gcSegment *edge, frSpacingEndOfLineConstraint *con, frBox &markerBox, bool &hasRoute) {
+  bool sol = false;
+  box_t queryBox;
+  gtl::rectangle_data<frCoord> queryRect;
+  checkMetalEndOfLine_eol_hasEol_getQueryBox(edge, con, queryBox, queryRect);
+
+  gtl::rectangle_data<frCoord> triggerRect;
+  vector<pair<segment_t, gcSegment*> > results;
+  auto &workerRegionQuery = getWorkerRegionQuery();
+  workerRegionQuery.queryPolygonEdge(queryBox, edge->getLayerNum(), results);
+  for (auto &[boostSeg, ptr]: results) {
+    // skip if non oppo-dir edge
+    if (edge->getDir() + ptr->getDir() != OPPOSITEDIR) {
+      continue;
+    }
+    checkMetalEndOfLine_eol_hasParallelEdge_oneDir_getParallelEdgeRect(ptr, triggerRect);
+    // skip if no area
+    if (!gtl::intersects(queryRect, triggerRect, false)) {
+      continue;
+    }
+    if (!ptr->isFixed()) {
+      hasRoute = true;
+    }
+    sol = true;
+    return sol;
+  }
+  return sol;
+}
+
+void FlexGCWorker::checkMetalEndOfLine_eol(gcSegment *edge, frSpacingEndOfLineConstraint *con) {
+  if (!checkMetalEndOfLine_eol_isEolEdge(edge, con)) {
+    return;
+  }
+  // check left/right parallel edge
+  bool hasRoute = false;
+  bool triggered = checkMetalEndOfLine_eol_hasParallelEdge(edge, con, hasRoute);
+  if (!triggered) {
+    return;
+  }
+  // check eol
+  frBox markerBox;
+  bool hasEol = checkMetalEndOfLine_eol_hasEol(edge, con, hasRoute);
+}
+
+void FlexGCWorker::checkMetalEndOfLine_main(gcPin* pin) {
+  //bool enableOutput = true;
+
+  auto poly = pin->getPolygon();
+  auto layerNum = poly->getLayerNum();
+  //auto net = poly->getNet();
+
+  auto &cons = design->getTech()->getLayer(layerNum)->getEolSpacing();
+  if (cons.empty()) {
+    return;
+  }
+
+  for (auto &edges: pin->getPolygonEdges()) {
+    for (auto &edge: edges) {
+      for (auto con: cons) {
+        checkMetalEndOfLine_eol(edge.get(), con);
+      }
+    }
+  }
+}
+
+void FlexGCWorker::checkMetalEndOfLine() {
+  if (targetNet) {
+    // layer --> net --> polygon
+    for (int i = std::max((frLayerNum)(getDesign()->getTech()->getBottomLayerNum()), minLayerNum); 
+         i <= std::min((frLayerNum)(getDesign()->getTech()->getTopLayerNum()), maxLayerNum); i++) {
+      auto currLayer = getDesign()->getTech()->getLayer(i);
+      if (currLayer->getType() != frLayerTypeEnum::ROUTING) {
+        continue;
+      }
+      for (auto &pin: targetNet->getPins(i)) {
+        checkMetalEndOfLine_main(pin.get());
+      }
+    }
+  } else {
+    // layer --> net --> polygon
+    for (int i = std::max((frLayerNum)(getDesign()->getTech()->getBottomLayerNum()), minLayerNum); 
+         i <= std::min((frLayerNum)(getDesign()->getTech()->getTopLayerNum()), maxLayerNum); i++) {
+      auto currLayer = getDesign()->getTech()->getLayer(i);
+      if (currLayer->getType() != frLayerTypeEnum::ROUTING) {
+        continue;
+      }
+      for (auto &net: getNets()) {
+        for (auto &pin: net->getPins(i)) {
+          checkMetalEndOfLine_main(pin.get());
+        }
+      }
+    }
+  }
+}
+
+int FlexGCWorker::main() {
+  // check Short, NSMet, MetSpc based on max rectangles
+  checkMetalSpacing();
+  // check MinWid, MinStp based on polygon
+  checkMetalShape();
+  // check eolSpc based on polygon
+  checkMetalEndOfLine();
+  return 0;
+}

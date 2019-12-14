@@ -49,7 +49,19 @@ extern int VERBOSE     ;
 extern int BOTTOM_ROUTING_LAYER;
 extern bool ALLOW_PIN_AS_FEEDTHROUGH;
 extern bool USENONPREFTRACKS;
+extern bool USEMINSPACING_OBS;
+extern bool RESERVE_VIA_ACCESS;
+extern bool ENABLE_BOUNDARY_MAR_FIX;
 //extern int TEST;
+extern fr::frLayerNum VIAINPIN_BOTTOMLAYERNUM;
+extern fr::frLayerNum VIAINPIN_TOPLAYERNUM;
+extern fr::frLayerNum VIAONLY_MACROCELLPIN_BOTTOMLAYERNUM;
+extern fr::frLayerNum VIAONLY_MACROCELLPIN_TOPLAYERNUM;
+extern fr::frLayerNum VIAONLY_STDCELLPIN_BOTTOMLAYERNUM;
+extern fr::frLayerNum VIAONLY_STDCELLPIN_TOPLAYERNUM;
+
+extern int MINNUMACCESSPOINT_MACROCELLPIN;
+extern int MINNUMACCESSPOINT_STDCELLPIN;
 
 extern int END_ITERATION;
 
@@ -60,9 +72,6 @@ extern fr::frUInt4 TADRCCOST;
 extern float       TASHAPEBLOATWIDTH;
 
 extern fr::frUInt4 VIACOST;
-extern bool USEMINSPACING_OBS;
-extern bool RESERVE_VIA_ACCESS;
-extern bool ENABLE_BOUNDARY_MAR_FIX;
 
 extern fr::frUInt4 GRIDCOST;
 extern fr::frUInt4 SHAPECOST;
@@ -95,7 +104,7 @@ extern std::ostream& operator<< (std::ostream& os, const fr::frPin &pinIn);
 extern std::ostream& operator<< (std::ostream& os, const fr::frRect &pinFig);
 extern std::ostream& operator<< (std::ostream& os, const fr::frPolygon &pinFig);
 extern std::ostream& operator<< (std::ostream& os, const fr::frNet &net);
-extern std::ostream& operator<< (std::ostream& os, const fr::frLayerBlockage &blk);
+//extern std::ostream& operator<< (std::ostream& os, const fr::frLayerBlockage &blk);
 
 extern std::ostream& operator<< (std::ostream& os, const fr::frPoint &pIn);
 extern std::ostream& operator<< (std::ostream& os, const fr::frBox &box);

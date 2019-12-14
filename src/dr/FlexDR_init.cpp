@@ -799,6 +799,7 @@ void FlexDRWorker::initNets_searchRepair(set<frNet*, frBlockObjectComp> &nets,
   }
 }
 
+/*
 void FlexDRWorker::initNet_termGenAp(drPin* dPin) {
   using namespace boost::polygon::operators;
 
@@ -1166,6 +1167,275 @@ void FlexDRWorker::initNet_termGenAp(drPin* dPin) {
     }
   }
 }
+*/
+
+void FlexDRWorker::initNet_termGenAp_new(drPin* dPin) {
+  using namespace boost::polygon::operators;
+
+  bool enableOutput = true;
+  auto routeBox = getRouteBox();
+  Rectangle routeRect(routeBox.left(), routeBox.bottom(), routeBox.right(), routeBox.top());
+  auto dPinTerm = dPin->getFrTerm();
+  if (dPinTerm->typeId() == frcInstTerm) {
+    auto instTerm = static_cast<frInstTerm*>(dPinTerm);
+    auto inst = instTerm->getInst();
+    frTransform xform;
+    inst->getUpdatedXform(xform);
+
+    for (auto &uPin:instTerm->getTerm()->getPins()) {
+      auto pin = uPin.get();
+      for (auto &uPinFig: pin->getFigs()) {
+        auto pinFig = uPinFig.get();
+        // horizontal tracks == yLocs
+        std::set<frCoord> xLocs, yLocs;
+        if (pinFig->typeId() == frcRect) {
+          auto rpinRect = static_cast<frRect*>(pinFig);
+          frLayerNum currLayerNum = rpinRect->getLayerNum();
+          frRect instPinRect(*rpinRect);
+          instPinRect.move(xform);
+          frBox instPinRectBBox;
+          instPinRect.getBBox(instPinRectBBox);
+          Rectangle pinRect(instPinRectBBox.left(), instPinRectBBox.bottom(), instPinRectBBox.right(), instPinRectBBox.top());
+          if (!boost::polygon::intersect(pinRect, routeRect)) {
+            continue;
+          }
+          // pinRect now equals intersection of pinRect and routeRect
+          auto currPrefRouteDir = getTech()->getLayer(currLayerNum)->getDir();
+          // get intersecting tracks if any
+          if (currPrefRouteDir == frcHorzPrefRoutingDir) {
+            getTrackLocs(true, currLayerNum, yl(pinRect), yh(pinRect), yLocs);
+            if (currLayerNum + 2 <= getDesign()->getTech()->getTopLayerNum()) {
+              getTrackLocs(false, currLayerNum + 2, xl(pinRect), xh(pinRect), xLocs);
+            } else if (currLayerNum - 2 >= getDesign()->getTech()->getBottomLayerNum()) {
+              getTrackLocs(false, currLayerNum - 2, xl(pinRect), xh(pinRect), xLocs);
+            } else {
+              getTrackLocs(false, currLayerNum, xl(pinRect), xh(pinRect), xLocs);
+            }
+          } else {
+            getTrackLocs(false, currLayerNum, xl(pinRect), xh(pinRect), xLocs);
+            if (currLayerNum + 2 <= getDesign()->getTech()->getTopLayerNum()) {
+              getTrackLocs(false, currLayerNum + 2, yl(pinRect), yh(pinRect), yLocs);
+            } else if (currLayerNum - 2 >= getDesign()->getTech()->getBottomLayerNum()) {
+              getTrackLocs(false, currLayerNum - 2, yl(pinRect), yh(pinRect), yLocs);
+            } else {
+              getTrackLocs(false, currLayerNum, yl(pinRect), yh(pinRect), yLocs);
+            }
+          }
+          // gen new temp on-track access point if any
+          if (!xLocs.empty() && !yLocs.empty()) {
+            // TODO: update access pattern information as needed
+            auto uap = std::make_unique<drAccessPattern>();
+            auto xLoc =*(xLocs.begin());
+            auto yLoc =*(yLocs.begin());
+            frPoint pt(xLoc, yLoc);
+            uap->setBeginLayerNum(currLayerNum);
+            uap->setPoint(pt);
+            if (!isInitDR() || xLoc != xh(routeRect) || yLoc != yh(routeRect)) {
+              dPin->addAccessPattern(uap);
+              break;
+            }
+          }
+        } else {
+          cout << "Error: initNet_termGenAp_new unsupported pinFig\n";
+        }
+      }
+      
+      // no on-track temp ap found
+      for (auto &uPinFig: pin->getFigs()) {
+        auto pinFig = uPinFig.get();
+        // horizontal tracks == yLocs
+        std::set<frCoord> xLocs, yLocs;
+        if (pinFig->typeId() == frcRect) {
+          auto rpinRect = static_cast<frRect*>(pinFig);
+          frLayerNum currLayerNum = rpinRect->getLayerNum();
+          frRect instPinRect(*rpinRect);
+          instPinRect.move(xform);
+          frBox instPinRectBBox;
+          instPinRect.getBBox(instPinRectBBox);
+          Rectangle pinRect(instPinRectBBox.left(), instPinRectBBox.bottom(), instPinRectBBox.right(), instPinRectBBox.top());
+          if (!boost::polygon::intersect(pinRect, routeRect)) {
+            continue;
+          }
+          // pinRect now equals intersection of pinRect and routeRect
+          auto currPrefRouteDir = getTech()->getLayer(currLayerNum)->getDir();
+          // get intersecting tracks if any
+          if (currPrefRouteDir == frcHorzPrefRoutingDir) {
+            getTrackLocs(true, currLayerNum, yl(pinRect), yh(pinRect), yLocs);
+            if (currLayerNum + 2 <= getDesign()->getTech()->getTopLayerNum()) {
+              getTrackLocs(false, currLayerNum + 2, xl(pinRect), xh(pinRect), xLocs);
+            } else if (currLayerNum - 2 >= getDesign()->getTech()->getBottomLayerNum()) {
+              getTrackLocs(false, currLayerNum - 2, xl(pinRect), xh(pinRect), xLocs);
+            } else {
+              getTrackLocs(false, currLayerNum, xl(pinRect), xh(pinRect), xLocs);
+            }
+          } else {
+            getTrackLocs(false, currLayerNum, xl(pinRect), xh(pinRect), xLocs);
+            if (currLayerNum + 2 <= getDesign()->getTech()->getTopLayerNum()) {
+              getTrackLocs(false, currLayerNum + 2, yl(pinRect), yh(pinRect), yLocs);
+            } else if (currLayerNum - 2 >= getDesign()->getTech()->getBottomLayerNum()) {
+              getTrackLocs(false, currLayerNum - 2, yl(pinRect), yh(pinRect), yLocs);
+            } else {
+              getTrackLocs(false, currLayerNum, yl(pinRect), yh(pinRect), yLocs);
+            }
+          }
+          // gen new temp on-track access point if any
+          frCoord xLoc, yLoc;
+          // xLoc
+          if (!xLocs.empty()) {
+            xLoc = *(xLocs.begin());
+          } else {
+            xLoc = (xl(pinRect) + xh(pinRect)) / 2;
+          }
+          // xLoc
+          if (!yLocs.empty()) {
+            yLoc = *(yLocs.begin());
+          } else {
+            yLoc = (yl(pinRect) + yh(pinRect)) / 2;
+          }
+          if (!isInitDR() || xLoc != xh(routeRect) || yLoc != yh(routeRect)) {
+            // TODO: update as drAccessPattern updated
+            auto uap = std::make_unique<drAccessPattern>();
+            frPoint pt(xLoc, yLoc);
+            uap->setBeginLayerNum(currLayerNum);
+            uap->setPoint(pt);
+            dPin->addAccessPattern(uap);
+            break;
+          }
+        } else {
+          cout << "Error: initNet_termGenAp_new unsupported pinFig\n";
+        }
+      }
+    }
+  } else if (dPinTerm->typeId() == frcTerm) {
+    auto term = static_cast<frTerm*>(dPinTerm);
+    for (auto &uPin: term->getPins()) {
+      auto pin = uPin.get();
+      for (auto &uPinFig: pin->getFigs()) {
+        auto pinFig = uPinFig.get();
+        // horizontal tracks == yLocs
+        std::set<frCoord> xLocs, yLocs;
+        if (pinFig->typeId() == frcRect) {
+          auto rpinRect = static_cast<frRect*>(pinFig);
+          frLayerNum currLayerNum = rpinRect->getLayerNum();
+          frRect instPinRect(*rpinRect);
+          // instPinRect.move(xform);
+          frBox instPinRectBBox;
+          instPinRect.getBBox(instPinRectBBox);
+          Rectangle pinRect(instPinRectBBox.left(), instPinRectBBox.bottom(), instPinRectBBox.right(), instPinRectBBox.top());
+          if (!boost::polygon::intersect(pinRect, routeRect)) {
+            continue;
+          }
+          // pinRect now equals intersection of pinRect and routeRect
+          auto currPrefRouteDir = getTech()->getLayer(currLayerNum)->getDir();
+          // get intersecting tracks if any
+          if (currPrefRouteDir == frcHorzPrefRoutingDir) {
+            getTrackLocs(true, currLayerNum, yl(pinRect), yh(pinRect), yLocs);
+            if (currLayerNum + 2 <= getDesign()->getTech()->getTopLayerNum()) {
+              getTrackLocs(false, currLayerNum + 2, xl(pinRect), xh(pinRect), xLocs);
+            } else if (currLayerNum - 2 >= getDesign()->getTech()->getBottomLayerNum()) {
+              getTrackLocs(false, currLayerNum - 2, xl(pinRect), xh(pinRect), xLocs);
+            } else {
+              getTrackLocs(false, currLayerNum, xl(pinRect), xh(pinRect), xLocs);
+            }
+          } else {
+            getTrackLocs(false, currLayerNum, xl(pinRect), xh(pinRect), xLocs);
+            if (currLayerNum + 2 <= getDesign()->getTech()->getTopLayerNum()) {
+              getTrackLocs(false, currLayerNum + 2, yl(pinRect), yh(pinRect), yLocs);
+            } else if (currLayerNum - 2 >= getDesign()->getTech()->getBottomLayerNum()) {
+              getTrackLocs(false, currLayerNum - 2, yl(pinRect), yh(pinRect), yLocs);
+            } else {
+              getTrackLocs(false, currLayerNum, yl(pinRect), yh(pinRect), yLocs);
+            }
+          }
+          // gen new temp on-track access point if any
+          if (!xLocs.empty() && !yLocs.empty()) {
+            // TODO: update access pattern information as needed
+            auto uap = std::make_unique<drAccessPattern>();
+            auto xLoc =*(xLocs.begin());
+            auto yLoc =*(yLocs.begin());
+            frPoint pt(xLoc, yLoc);
+            uap->setBeginLayerNum(currLayerNum);
+            uap->setPoint(pt);
+            if (!isInitDR() || xLoc != xh(routeRect) || yLoc != yh(routeRect)) {
+              dPin->addAccessPattern(uap);
+              break;
+            }
+          }
+        } else {
+          cout << "Error: initNet_termGenAp_new unsupported pinFig\n";
+        }
+      }
+      
+      // no on-track temp ap found
+      for (auto &uPinFig: pin->getFigs()) {
+        auto pinFig = uPinFig.get();
+        // horizontal tracks == yLocs
+        std::set<frCoord> xLocs, yLocs;
+        if (pinFig->typeId() == frcRect) {
+          auto rpinRect = static_cast<frRect*>(pinFig);
+          frLayerNum currLayerNum = rpinRect->getLayerNum();
+          frRect instPinRect(*rpinRect);
+          // instPinRect.move(xform);
+          frBox instPinRectBBox;
+          instPinRect.getBBox(instPinRectBBox);
+          Rectangle pinRect(instPinRectBBox.left(), instPinRectBBox.bottom(), instPinRectBBox.right(), instPinRectBBox.top());
+          if (!boost::polygon::intersect(pinRect, routeRect)) {
+            continue;
+          }
+          // pinRect now equals intersection of pinRect and routeRect
+          auto currPrefRouteDir = getTech()->getLayer(currLayerNum)->getDir();
+          // get intersecting tracks if any
+          if (currPrefRouteDir == frcHorzPrefRoutingDir) {
+            getTrackLocs(true, currLayerNum, yl(pinRect), yh(pinRect), yLocs);
+            if (currLayerNum + 2 <= getDesign()->getTech()->getTopLayerNum()) {
+              getTrackLocs(false, currLayerNum + 2, xl(pinRect), xh(pinRect), xLocs);
+            } else if (currLayerNum - 2 >= getDesign()->getTech()->getBottomLayerNum()) {
+              getTrackLocs(false, currLayerNum - 2, xl(pinRect), xh(pinRect), xLocs);
+            } else {
+              getTrackLocs(false, currLayerNum, xl(pinRect), xh(pinRect), xLocs);
+            }
+          } else {
+            getTrackLocs(false, currLayerNum, xl(pinRect), xh(pinRect), xLocs);
+            if (currLayerNum + 2 <= getDesign()->getTech()->getTopLayerNum()) {
+              getTrackLocs(false, currLayerNum + 2, yl(pinRect), yh(pinRect), yLocs);
+            } else if (currLayerNum - 2 >= getDesign()->getTech()->getBottomLayerNum()) {
+              getTrackLocs(false, currLayerNum - 2, yl(pinRect), yh(pinRect), yLocs);
+            } else {
+              getTrackLocs(false, currLayerNum, yl(pinRect), yh(pinRect), yLocs);
+            }
+          }
+          // gen new temp on-track access point if any
+          frCoord xLoc, yLoc;
+          // xLoc
+          if (!xLocs.empty()) {
+            xLoc = *(xLocs.begin());
+          } else {
+            xLoc = (xl(pinRect) + xh(pinRect)) / 2;
+          }
+          // xLoc
+          if (!yLocs.empty()) {
+            yLoc = *(yLocs.begin());
+          } else {
+            yLoc = (yl(pinRect) + yh(pinRect)) / 2;
+          }
+          if (!isInitDR() || xLoc != xh(routeRect) || yLoc != yh(routeRect)) {
+            // TODO: update as drAccessPattern updated
+            auto uap = std::make_unique<drAccessPattern>();
+            frPoint pt(xLoc, yLoc);
+            uap->setBeginLayerNum(currLayerNum);
+            uap->setPoint(pt);
+            dPin->addAccessPattern(uap);
+            break;
+          }
+        } else {
+          cout << "Error: initNet_termGenAp_new unsupported pinFig\n";
+        }
+      }
+    }
+  } else {
+    cout << "Error: initNet_termGenAp_new unexpected type\n";
+  }
+}
 
 // when isHorzTracks == true, it means track loc == y loc
 void FlexDRWorker::getTrackLocs(bool isHorzTracks, frLayerNum currLayerNum, frCoord low, frCoord high, std::set<frCoord> &trackLocs) {
@@ -1198,6 +1468,7 @@ void FlexDRWorker::getTrackLocs(bool isHorzTracks, frLayerNum currLayerNum, frCo
   }
 }
 
+/*
 void FlexDRWorker::initNet_term(drNet* dNet, vector<frBlockObject*> &terms) {
   bool enableOutput = false;
   //bool enableOutput = true;
@@ -1304,6 +1575,165 @@ void FlexDRWorker::initNet_term(drNet* dNet, vector<frBlockObject*> &terms) {
             ap->getPoint(bp);
             cout <<" (" <<bp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
                         <<bp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") ";
+          }
+          cout <<endl;
+        }
+      }
+    }
+    dPin->setId(pinCnt);
+    pinCnt++;
+    dNet->addPin(dPin);
+  }
+}
+*/
+
+void FlexDRWorker::initNet_term_new(drNet* dNet, vector<frBlockObject*> &terms) {
+  bool enableOutput = false;
+  //bool enableOutput = true;
+  for (auto term: terms) {
+    auto dPin = make_unique<drPin>();
+    dPin->setFrTerm(term);
+    // ap
+    frTransform instXform; // (0,0), frcR0
+    frTransform shiftXform;
+    frTerm* trueTerm = nullptr;
+    string  name;
+    //bool hasInst = false;
+    frInst* inst = nullptr;
+    //vector<frAccessPoint*> *instTermPrefAps = nullptr;
+    if (term->typeId() == frcInstTerm) {
+      //hasInst = true;
+      inst = static_cast<frInstTerm*>(term)->getInst();
+      //inst->getTransform(instXform);
+      inst->getTransform(shiftXform);
+      shiftXform.set(frOrient(frcR0));
+      inst->getUpdatedXform(instXform);
+      //inst->getUpdatedXform(shiftXform, true); // get no orient version
+      trueTerm = static_cast<frInstTerm*>(term)->getTerm();
+      name = inst->getName() + string("/") + trueTerm->getName();
+      //instTermPrefAps = static_cast<frInstTerm*>(term)->getAccessPoints();
+    } else if (term->typeId() == frcTerm) {
+      trueTerm = static_cast<frTerm*>(term);
+      name = string("PIN/") + trueTerm->getName();
+    }
+    if (enableOutput) {
+      cout <<"pin " <<name;
+    }
+    int pinIdx = 0;
+    int pinAccessIdx = (inst) ? inst->getPinAccessIdx() : -1;
+    for (auto &pin: trueTerm->getPins()) {
+      frAccessPoint* prefAp = nullptr;
+      if (inst) {
+        prefAp = (static_cast<frInstTerm*>(term)->getAccessPoints())[pinIdx];
+      }
+      if (!pin->hasPinAccess()) {
+        continue;
+      }
+      if (pinAccessIdx == -1) {
+        continue;
+      }
+      for (auto &ap: pin->getPinAccess(pinAccessIdx)->getAccessPoints()) {
+        frPoint bp;
+        ap->getPoint(bp);
+        if (enableOutput) {
+          cout <<" (" <<bp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
+                      <<bp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") origin";
+        }
+        auto bNum = ap->getLayerNum();
+        bp.transform(shiftXform);
+
+        auto dAp  = make_unique<drAccessPattern>();
+        dAp->setPoint(bp);
+        dAp->setBeginLayerNum(bNum);
+        if (ap.get() == prefAp) {
+          dAp->setPinCost(0);
+        } else {
+          dAp->setPinCost(1);
+        }
+        // set min area
+        if (ENABLE_BOUNDARY_MAR_FIX) {
+          auto minAreaConstraint = getDesign()->getTech()->getLayer(bNum)->getAreaConstraint();
+          if (minAreaConstraint) {
+            auto reqArea = minAreaConstraint->getMinArea();
+            dAp->setBeginArea(reqArea);
+          }
+        }
+        dAp->setValidAccess(ap->getAccess());
+        if (ap->hasAccess(frDirEnum::U)) {
+          if (!(ap->getViaDefs().empty())) {
+            dAp->setAccessViaDef(frDirEnum::U, &(ap->getViaDefs()));
+          }
+        }
+        //if (!(ap->getAccessViaDef(frDirEnum::D).empty())) {
+        //  dAp->setAccessViaDef(frDirEnum::D, &(ap->getAccessViaDef(frDirEnum::D)));
+        //}
+        if (getRouteBox().contains(bp)) {
+          if (isInitDR() && getRouteBox().right() == bp.x() && getRouteBox().top() == bp.y()) {
+            if (enableOutput) {
+              cout <<" (" <<bp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
+                          <<bp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") skipped";
+            }
+          } else {
+            dPin->addAccessPattern(dAp);
+            if (enableOutput) {
+              cout <<" (" <<bp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
+                          <<bp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") added";
+            }
+          }
+        } else {
+          if (enableOutput) {
+            cout <<" (" <<bp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
+                        <<bp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") skipped";
+          }
+        }
+      }
+      pinIdx++;
+    }
+
+
+    if (enableOutput) {
+       cout <<endl;
+       cout <<"ap size = " <<dPin->getAccessPatterns().size() <<endl;
+    }
+
+    if (dPin->getAccessPatterns().empty()) {
+      if (enableOutput) {
+        cout <<"Warning: pin " <<name <<" does not have pre-calculated ap, gen temp ap ";
+        //for (auto &[bp, bNum]: pts) {
+        //  cout <<" (" <<bp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
+        //              <<bp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") ";
+        //}
+        //cout <<endl;
+      }
+      initNet_termGenAp_new(dPin.get());
+      if (dPin->getAccessPatterns().empty()) {
+        cout <<endl <<"Error: pin " <<name <<" still does not have temp ap" <<endl;
+        exit(1);
+      } else {
+        if (enableOutput) {
+          for (auto &ap: dPin->getAccessPatterns()) {
+            frPoint bp;
+            ap->getPoint(bp);
+            cout <<" (" <<bp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
+                        <<bp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") ";
+          }
+          cout <<endl;
+        }
+        if (dNet->getFrNet()->getName() == string("iopin242")) {
+          cout <<"@@@@@debug ";
+          if (term->typeId() == frcInstTerm) {
+            auto inst = static_cast<frInstTerm*>(term)->getInst();
+            auto trueTerm = static_cast<frInstTerm*>(term)->getTerm();
+            name = inst->getName() + string("/") + trueTerm->getName();
+          } else if (term->typeId() == frcTerm) {
+            trueTerm = static_cast<frTerm*>(term);
+            name = string("PIN/") + trueTerm->getName();
+          }
+          for (auto &ap: dPin->getAccessPatterns()) {
+            frPoint bp;
+            ap->getPoint(bp);
+              cout <<" (" <<bp.x() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<", "
+                          <<bp.y() * 1.0 / getDesign()->getTopBlock()->getDBUPerUU() <<") ";
           }
           cout <<endl;
         }
@@ -1437,6 +1867,11 @@ void FlexDRWorker::initNet_boundary(drNet* dNet,
   }
 }
 
+void FlexDRWorker::initNet_addNet(unique_ptr<drNet> &in) {
+  owner2nets[in->getFrNet()].push_back(in.get());
+  nets.push_back(std::move(in));
+}
+
 void FlexDRWorker::initNet(frNet* net, 
                            vector<unique_ptr<drConnFig> > &routeObjs,
                            vector<unique_ptr<drConnFig> > &extObjs,
@@ -1447,7 +1882,7 @@ void FlexDRWorker::initNet(frNet* net,
   auto dNet = make_unique<drNet>();
   dNet->setFrNet(net);
   // true pin
-  initNet_term(dNet.get(), terms);
+  initNet_term_new(dNet.get(), terms);
   // boundary pin, could overlap with any of true pins
   initNet_boundary(dNet.get(), extObjs);
   // no ext routes in initDR to avoid weird TA shapes
@@ -1461,7 +1896,8 @@ void FlexDRWorker::initNet(frNet* net,
   }
   dNet->setOrigGuides(origGuides);
   dNet->setId(nets.size());
-  nets.push_back(std::move(dNet));
+  initNet_addNet(dNet);
+  //nets.push_back(std::move(dNet));
 }
 
 void FlexDRWorker::initNets_regionQuery() {
@@ -2185,8 +2621,8 @@ void FlexDRWorker::initMazeCost_marker_fixMode_0(const frMarker &marker) {
          <<getDesign()->getTech()->getLayer(lNum)->getName() <<" " <<bloatDist
          <<endl;
   }
-  bool markerHasDir = marker.hasDir();
-  bool isHSpc = marker.isH();
+  //bool markerHasDir = marker.hasDir();
+  //bool isHSpc = marker.isH();
   workerRegionQuery.query(bloatBox, lNum, results);
   frBox objBox;
   for (auto &[boostB, connFig]: results) {
@@ -2194,12 +2630,12 @@ void FlexDRWorker::initMazeCost_marker_fixMode_0(const frMarker &marker) {
     // for pathseg-related marker, bloat marker by half width and add marker cost planar
     if (connFig->typeId() == drcPathSeg) {
       //cout <<"@@pathseg" <<endl;
-      if (markerHasDir && isHSpc && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
-        continue;
-      }
-      if (markerHasDir && !isHSpc && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
-        continue;
-      }
+      //if (markerHasDir && isHSpc && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
+      //  continue;
+      //}
+      //if (markerHasDir && !isHSpc && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
+      //  continue;
+      //}
       // update marker dist
       auto dx = max(max(objBox.left(),   mBox.left())   - min(objBox.right(), mBox.right()), 0);
       auto dy = max(max(objBox.bottom(), mBox.bottom()) - min(objBox.top(),   mBox.top()),   0);
@@ -2238,12 +2674,12 @@ void FlexDRWorker::initMazeCost_marker_fixMode_0(const frMarker &marker) {
     // for via-related marker, add marker cost via
     } else if (connFig->typeId() == drcVia) {
       //cout <<"@@via" <<endl;
-      if (markerHasDir && isHSpc && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
-        continue;
-      }
-      if (markerHasDir && !isHSpc && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
-        continue;
-      }
+      //if (markerHasDir && isHSpc && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
+      //  continue;
+      //}
+      //if (markerHasDir && !isHSpc && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
+      //  continue;
+      //}
       if (getDesign()->getTech()->getLayer(lNum)->getType() == frLayerTypeEnum::ROUTING &&
           marker.getConstraint()->typeId() == frConstraintTypeEnum::frcShortConstraint) {
         continue;
@@ -2287,7 +2723,7 @@ void FlexDRWorker::initMazeCost_marker_fixMode_0(const frMarker &marker) {
         }
       }
     } else {
-      cout <<"Error: unsupporterd dr type" <<endl;
+      cout <<"Error: unsupported dr type" <<endl;
     }
   }
 }
@@ -2481,7 +2917,7 @@ void FlexDRWorker::initMazeCost_marker_fixMode_1(const frMarker &marker, bool ke
     } else if (connFig->typeId() == drcPatchWire) {
       // TODO: could add marker // for now we think the other part in the violation would not be patchWire
     } else {
-      cout <<"Error: unsupporterd dr type" <<endl;
+      cout <<"Error: unsupported dr type" <<endl;
     }
   }
 }
@@ -2517,11 +2953,11 @@ bool FlexDRWorker::initMazeCost_marker_fixMode_3_addHistoryCost(const frMarker &
       }
       fixable = true;
       // skip if curr is irrelavant spacing violation
-      if (marker.hasDir() && marker.isH() && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
-        continue;
-      } else if (marker.hasDir() && !marker.isH() && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
-        continue;
-      }
+      //if (marker.hasDir() && marker.isH() && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
+      //  continue;
+      //} else if (marker.hasDir() && !marker.isH() && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
+      //  continue;
+      //}
       // add history cost
       // get points to mark up, markup up to "width" grid points to the left and right of pathseg
       obj->getStyle(segStyle);
@@ -2574,11 +3010,11 @@ bool FlexDRWorker::initMazeCost_marker_fixMode_3_addHistoryCost(const frMarker &
       }
       fixable = true;
       // skip if curr is irrelavant spacing violation
-      if (marker.hasDir() && marker.isH() && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
-        continue;
-      } else if (marker.hasDir() && !marker.isH() && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
-        continue;
-      }
+      //if (marker.hasDir() && marker.isH() && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
+      //  continue;
+      //} else if (marker.hasDir() && !marker.isH() && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
+      //  continue;
+      //}
       // add history cost
       obj->getMazeIdx(objMIdx1, objMIdx2);
       gridGraph.addMarkerCostVia(objMIdx1.x(), objMIdx1.y(), objMIdx1.z());
@@ -2595,11 +3031,11 @@ bool FlexDRWorker::initMazeCost_marker_fixMode_3_addHistoryCost(const frMarker &
       }
       fixable = true;
       // skip if curr is irrelavant spacing violation
-      if (marker.hasDir() && marker.isH() && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
-        continue;
-      } else if (marker.hasDir() && !marker.isH() && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
-        continue;
-      }
+      //if (marker.hasDir() && marker.isH() && objBox.top() != mBox.bottom() && objBox.bottom() != mBox.top()) {
+      //  continue;
+      //} else if (marker.hasDir() && !marker.isH() && objBox.right() != mBox.left() && objBox.left() != mBox.right()) {
+      //  continue;
+      //}
       // add history cost
       gridGraph.getMazeIdx(objMIdx1, bp, lNum);
       //frBox offsetBox;
@@ -2737,7 +3173,7 @@ void FlexDRWorker::initMazeCost_marker_fixMode_3_ripupNets(const frMarker &marke
           cout <<"ripup pwire from " <<connFig->getNet()->getFrNet()->getName() <<endl;
         }
       } else {
-        cout <<"Error: unsupporterd dr type" <<endl;
+        cout <<"Error: unsupported dr type" <<endl;
       }
     }
   }
@@ -3239,12 +3675,14 @@ void FlexDRWorker::initFixedObjs() {
   box_t queryBox(point_t(extBox.left(), extBox.bottom()), point_t(extBox.right(), extBox.top()));
   set<frBlockObject*> drcObjSet;
   // fixed obj
+  int cnt = 0;
   for (auto layerNum = getDesign()->getTech()->getBottomLayerNum(); 
        layerNum <= design->getTech()->getTopLayerNum(); ++layerNum) {
     auto regionQuery = getDesign()->getRegionQuery();
     vector<rq_rptr_value_t<frBlockObject> > queryResult;
     regionQuery->query(queryBox, layerNum, queryResult);
     for (auto &objPair: queryResult) {
+      cnt ++;
       if (drcObjSet.find(objPair.second) == drcObjSet.end()) {
         drcObjSet.insert(objPair.second);
         fixedObjs.push_back(objPair.second);
@@ -3257,6 +3695,7 @@ void FlexDRWorker::initFixedObjs() {
   if (enableOutput) {
     cout << "#fixed obj = " << fixedObjs.size() << "\n";
   }
+  //cout << "#fixed obj (drworker) = " << cnt << "\n";
 }
 
 void FlexDRWorker::initMarkers() {

@@ -343,6 +343,24 @@ void FlexPinPrep::instTermPinPrep(frInstTerm *instTerm, const std::set<frInst*, 
             if ((objPtr->typeId() == frcInstTerm && (static_cast<frInstTerm*>(objPtr))->getInst() == inst) || 
                 (objPtr->typeId() == frcInstBlockage && (static_cast<frInstBlockage*>(objPtr)->getInst() == inst))) {
               pinObjs.push_back(objPtr);
+              //if (objPtr->typeId() == frcInstBlockage) {
+              //  std::cout <<"instblk@";
+              //  for (auto &uFig: static_cast<frInstBlockage*>(objPtr)->getBlockage()->getPin()->getFigs()) {
+              //    if (uFig->typeId() == frcRect) {
+              //      auto fig = static_cast<frRect*>(uFig.get());
+              //      frBox box;
+              //      fig->getBBox(box);
+              //      double dbu = design->getTopBlock()->getDBUPerUU();
+              //      cout <<" (" 
+              //           <<box.left()   / dbu <<", " 
+              //           <<box.bottom() / dbu <<") ("
+              //           <<box.right()  / dbu <<", " 
+              //           <<box.top()    / dbu <<") "
+              //           <<design->getTech()->getLayer(fig->getLayerNum())->getName();
+              //    }
+              //  }
+              //  std::cout <<std::endl;
+              //}
             }
             pinObjSet.insert(objPtr);
           }
@@ -406,6 +424,9 @@ void FlexPinPrep::instTermPinPrep(frInstTerm *instTerm, const std::set<frInst*, 
               ap.setValidAccess(frDirEnum::E, true);
               ++APCnt;
               ++instTermAPCnt;
+              if (enableOutput) {
+                std::cout <<"@@ap" <<std::endl;
+              }
             } else {
               ap.setValidAccess(frDirEnum::E, false);
             }
@@ -421,6 +442,9 @@ void FlexPinPrep::instTermPinPrep(frInstTerm *instTerm, const std::set<frInst*, 
               ap.setValidAccess(frDirEnum::S, true);
               ++APCnt;
               ++instTermAPCnt;
+              if (enableOutput) {
+                std::cout <<"@@ap" <<std::endl;
+              }
             } else {
               ap.setValidAccess(frDirEnum::S, false);
             }
@@ -436,6 +460,9 @@ void FlexPinPrep::instTermPinPrep(frInstTerm *instTerm, const std::set<frInst*, 
               ap.setValidAccess(frDirEnum::W, true);
               ++APCnt;
               ++instTermAPCnt;
+              if (enableOutput) {
+                std::cout <<"@@ap" <<std::endl;
+              }
             } else {
               ap.setValidAccess(frDirEnum::W, false);
             }
@@ -451,6 +478,9 @@ void FlexPinPrep::instTermPinPrep(frInstTerm *instTerm, const std::set<frInst*, 
               ap.setValidAccess(frDirEnum::N, true);
               ++APCnt;
               ++instTermAPCnt;
+              if (enableOutput) {
+                std::cout <<"@@ap" <<std::endl;
+              }
             } else {
               ap.setValidAccess(frDirEnum::N, false);
             }
@@ -494,12 +524,18 @@ void FlexPinPrep::instTermPinPrep(frInstTerm *instTerm, const std::set<frInst*, 
                   if (!viaDef->getDefault()) {
                     continue;
                   }
+                  //if (enableOutput) {
+                  //  std::cout <<"  trying " <<viaDef->getName() <<std::endl;
+                  //}
                   if (isValidViaAccess(pinPtr, instTerm, pinObjs, startLayerNum, startPt, viaDef, priority)) {
                     ap.setValidAccess(frDirEnum::U, true);
                     ++APCnt;
                     ++instTermAPCnt;
                     ++attemptCnt;
                     priority2ViaDef[std::make_pair(std::get<2>(priority), viaDefIt->first)] = viaDef;
+                    if (enableOutput) {
+                      std::cout <<"@@ap" <<std::endl;
+                    }
                   }
                 }
               }

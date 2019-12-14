@@ -143,6 +143,9 @@ namespace fr{
     bool getDefault() const {
       return isDefault;
     }
+    int getNumCut() const {
+      return cutFigs.size();
+    }
     bool hasCutClass() const {
       return (cutClass.lock()) ? true : false;
     }

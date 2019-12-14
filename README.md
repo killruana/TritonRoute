@@ -36,6 +36,7 @@ $ cd TritonRoute
 $ mkdir build
 $ cd build
 $ cmake -DBOOST_ROOT=<BOOST_ROOT> ../
+$ cd ../
 $ make
 ```
    
@@ -46,11 +47,10 @@ $ ./TritonRoute -lef <LEF_FILE> -def <DEF_FILE> -guide <GUIDE_FILE> -output <OUT
 
 ## Supported Technologies ##
 * CLN65LP (with limited selection of standard cells, macros and floorplans)
-* (TritonRoute is under a major improvement plan for a more robust and stable 
-flow, with support of more standard cells, macros and floorplans in CLN65LP 
-and other technology nodes. The next version is expected to deliver support 
-of publicly accessible ISPD-2018 and ISPD-2019 testcases.)
+* ISPD-2018 Initial Detailed Routing Contest 
 
+## Acknowledgement ##
+Special thanks to the anonymous contributers of the new DRC engine and pin access analysis engine.
 
 ## License ##
 * [BSD 3-clause License](LICENSE) 

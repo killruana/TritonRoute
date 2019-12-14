@@ -647,73 +647,138 @@ void fr::DRCWorker::initNetRects_connFigs() {
 }
 
 void fr::DRCWorker::initNetRects_blockages() {
+  //int cnt = 0;
   for (auto obj: blockages) {
+    //std::cout <<cnt <<std::endl;
     DRCNet *drcNet = nullptr;
     switch (obj->typeId()) {
-      case frcLayerBlockage:
-      {
-        frLayerBlockage* layerBlockage = static_cast<frLayerBlockage*>(obj);
-        int netId = static_cast<int>(drcSpecialNetIdEnum::OBS);
-        // push layer shapes
-        drcNet = drcNets[netId].get();
-        frLayerNum layerNum = layerBlockage->getLayerNum();
-        auto blockageFrPoints = layerBlockage->getPoints();
-        std::vector<Point> blockagePoints;
-        for (auto pt: blockageFrPoints) {
-          blockagePoints.push_back(Point(pt.x(), pt.y()));
-        }
-        Polygon blockagePoly;
-        set_points(blockagePoly, blockagePoints.begin(), blockagePoints.end());
-        drcNet->addFixedLayerPoly(layerNum, blockagePoly);
-        // add cut obs to cut layer rect
-        if (design->getTech()->getLayer(layerNum)->getType() == frLayerTypeEnum::CUT) {
-          std::vector<Rectangle> maxRects;
-          PolygonSet tempPS;
-          tempPS += blockagePoly;
-          get_max_rectangles(maxRects, tempPS);
-          for (auto &maxRect: maxRects) {
-            drcNet->addRouteLayerCutRect(layerNum, maxRect);
-          }
-        }
-        break;
-      }
+      //case frcLayerBlockage:
+      //{
+      //  frLayerBlockage* layerBlockage = static_cast<frLayerBlockage*>(obj);
+      //  int netId = static_cast<int>(drcSpecialNetIdEnum::OBS);
+      //  // push layer shapes
+      //  drcNet = drcNets[netId].get();
+      //  frLayerNum layerNum = layerBlockage->getLayerNum();
+      //  auto blockageFrPoints = layerBlockage->getPoints();
+      //  std::vector<Point> blockagePoints;
+      //  for (auto pt: blockageFrPoints) {
+      //    blockagePoints.push_back(Point(pt.x(), pt.y()));
+      //  }
+      //  Polygon blockagePoly;
+      //  set_points(blockagePoly, blockagePoints.begin(), blockagePoints.end());
+      //  drcNet->addFixedLayerPoly(layerNum, blockagePoly);
+      //  // add cut obs to cut layer rect
+      //  if (design->getTech()->getLayer(layerNum)->getType() == frLayerTypeEnum::CUT) {
+      //    std::vector<Rectangle> maxRects;
+      //    PolygonSet tempPS;
+      //    tempPS += blockagePoly;
+      //    get_max_rectangles(maxRects, tempPS);
+      //    for (auto &maxRect: maxRects) {
+      //      drcNet->addRouteLayerCutRect(layerNum, maxRect);
+      //    }
+      //  }
+      //  break;
+      //}
       case frcInstBlockage:
       {
-        // std::cout << "adding frInstBlockage\n";
-        frBlockage* blockage = (static_cast<frInstBlockage*>(obj))->getBlockage();
-        if (blockage->typeId() != frcLayerBlockage) {
-          std::cout << "Error: unexpected blockage type in initNetRects_blockages\n";
-          break;
-        }
+        //std::cout << "adding frInstBlockage\n";
+        // new
+        auto blockage = (static_cast<frInstBlockage*>(obj))->getBlockage();
+        auto pin = blockage->getPin();
         frInst* inst = (static_cast<frInstBlockage*>(obj))->getInst();
+        //std::cout <<"inst@@@" <<inst->getName() <<std::endl;
         frTransform xform;
         inst->getUpdatedXform(xform);
-        frLayerBlockage* layerBlockage = static_cast<frLayerBlockage*>(blockage);
         int netId = static_cast<int>(drcSpecialNetIdEnum::OBS);
         // push layer shapes
         drcNet = drcNets[netId].get();
-        frLayerNum layerNum = layerBlockage->getLayerNum();
-        auto blockageFrPoints = layerBlockage->getPoints();
-        std::vector<Point> blockagePoints;
-        for (auto pt: blockageFrPoints) {
-          frPoint tmpPt = pt;
-          tmpPt.transform(xform);
-          blockagePoints.push_back(Point(tmpPt.x(), tmpPt.y()));
-        }
-        Polygon blockagePoly;
-        set_points(blockagePoly, blockagePoints.begin(), blockagePoints.end());
-        drcNet->addFixedLayerPoly(layerNum, blockagePoly);
-        // add cut obs to cut layer rect
-        if (design->getTech()->getLayer(layerNum)->getType() == frLayerTypeEnum::CUT) {
-          std::vector<Rectangle> maxRects;
-          PolygonSet tempPS;
-          tempPS += blockagePoly;
-          get_max_rectangles(maxRects, tempPS);
-          for (auto &maxRect: maxRects) {
-            drcNet->addRouteLayerCutRect(layerNum, maxRect);
+        for (auto &uFig: pin->getFigs()) {
+          auto fig = uFig.get();
+          if (fig->typeId() == frcRect) {
+            auto obj = static_cast<frRect*>(fig);
+            auto layerNum = obj->getLayerNum();
+            frBox box;
+            obj->getBBox(box);
+            //double dbu = design->getTopBlock()->getDBUPerUU();
+            //std::cout <<"@@@before " 
+            //          <<box.left()   / dbu <<" " 
+            //          <<box.bottom() / dbu <<" " 
+            //          <<box.right()  / dbu <<" " 
+            //          <<box.top()    / dbu <<std::endl;
+            box.transform(xform);
+            //std::cout <<"@@@after " 
+            //          <<box.left()   / dbu <<" " 
+            //          <<box.bottom() / dbu <<" " 
+            //          <<box.right()  / dbu <<" " 
+            //          <<box.top()    / dbu <<" "
+            //          <<design->getTech()->getLayer(layerNum)->getName() <<std::endl;
+            Rectangle blockageRect(box.left(), box.bottom(), box.right(), box.top());
+            drcNet->addFixedLayerRect(layerNum, blockageRect);
+            //std::cout <<"adding rect obs" <<std::endl;
+            // add cut obs to cut layer rect
+            if (design->getTech()->getLayer(layerNum)->getType() == frLayerTypeEnum::CUT) {
+              drcNet->addRouteLayerCutRect(layerNum, blockageRect);
+            }
+          } else if (fig->typeId() == frcPolygon) {
+            auto obj = static_cast<frPolygon*>(fig);
+            auto layerNum = obj->getLayerNum();
+            std::vector<Point> blockagePoints;
+            for (auto tmpPt: obj->getPoints()) {
+              tmpPt.transform(xform);
+              blockagePoints.push_back(Point(tmpPt.x(), tmpPt.y()));;
+            }
+            Polygon blockagePoly;
+            set_points(blockagePoly, blockagePoints.begin(), blockagePoints.end());
+            drcNet->addFixedLayerPoly(layerNum, blockagePoly);
+            //std::cout <<"adding poly obs" <<std::endl;
+            // add cut obs to cut layer rect
+            if (design->getTech()->getLayer(layerNum)->getType() == frLayerTypeEnum::CUT) {
+              std::vector<Rectangle> maxRects;
+              get_max_rectangles(maxRects, blockagePoly);
+              for (auto &maxRect: maxRects) {
+                drcNet->addRouteLayerCutRect(layerNum, maxRect);
+              }
+            }
+          } else {
+            std::cout <<"Error: unsupported shape in initNetRect_blockages" <<std::endl;
           }
         }
         break;
+        // old
+        //frBlockage* blockage = (static_cast<frInstBlockage*>(obj))->getBlockage();
+        //if (blockage->typeId() != frcLayerBlockage) {
+        //  std::cout << "Error: unexpected blockage type in initNetRects_blockages\n";
+        //  break;
+        //}
+        //frInst* inst = (static_cast<frInstBlockage*>(obj))->getInst();
+        //frTransform xform;
+        //inst->getUpdatedXform(xform);
+        //frLayerBlockage* layerBlockage = static_cast<frLayerBlockage*>(blockage);
+        //int netId = static_cast<int>(drcSpecialNetIdEnum::OBS);
+        //// push layer shapes
+        //drcNet = drcNets[netId].get();
+        //frLayerNum layerNum = layerBlockage->getLayerNum();
+        //auto blockageFrPoints = layerBlockage->getPoints();
+        //std::vector<Point> blockagePoints;
+        //for (auto pt: blockageFrPoints) {
+        //  frPoint tmpPt = pt;
+        //  tmpPt.transform(xform);
+        //  blockagePoints.push_back(Point(tmpPt.x(), tmpPt.y()));
+        //}
+        //Polygon blockagePoly;
+        //set_points(blockagePoly, blockagePoints.begin(), blockagePoints.end());
+        //drcNet->addFixedLayerPoly(layerNum, blockagePoly);
+        //// add cut obs to cut layer rect
+        //if (design->getTech()->getLayer(layerNum)->getType() == frLayerTypeEnum::CUT) {
+        //  std::vector<Rectangle> maxRects;
+        //  PolygonSet tempPS;
+        //  tempPS += blockagePoly;
+        //  get_max_rectangles(maxRects, tempPS);
+        //  for (auto &maxRect: maxRects) {
+        //    drcNet->addRouteLayerCutRect(layerNum, maxRect);
+        //  }
+        //}
+        //break;
       }
       default:
         std::cout << "Warning: unsupported blockage type in initNetRects_blockages, skipped...\n";

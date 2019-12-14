@@ -109,43 +109,61 @@ namespace fr {
       return frConstraintTypeEnum::frcShortConstraint;
     }
   };
+  
+  // NSMetal
+  class frNonSufficientMetalConstraint : public frConstraint {
+  public:
+    frConstraintTypeEnum typeId() const override {
+      return frConstraintTypeEnum::frcNonSufficientMetalConstraint;
+    }
+  };
 
   // minStep
   class frMinStepConstraint : public frConstraint {
   public:
     // constructor
     frMinStepConstraint() : minStepLength(-1), 
+                            minstepType(frMinstepTypeEnum::UNKNOWN),
                             maxLength(-1), 
                             insideCorner(false), 
                             outsideCorner(true), 
                             step(false),
                             maxEdges(-1) {}
     // getter
-    frCoord getMinStepLength() {
+    frCoord getMinStepLength() const {
       return minStepLength;
     }
-    bool hasMaxLength() {
+    bool hasMaxLength() const {
       return (maxLength != -1);
     }
-    frCoord getMaxLength() {
+    frCoord getMaxLength() const {
       return maxLength;
     }
-    bool hasInsideCorner() {
+    bool hasMinstepType() const {
+      return minstepType != frMinstepTypeEnum::UNKNOWN;
+    }
+    frMinstepTypeEnum getMinstepType() const {
+      return minstepType;
+    }
+    bool hasInsideCorner() const {
       return insideCorner;
     }
-    bool hasOutsideCorner() {
+    bool hasOutsideCorner() const {
       return outsideCorner;
     }
-    bool hasStep() {
+    bool hasStep() const {
       return step;
     }
-    bool hasMaxEdges() {
+    bool hasMaxEdges() const {
       return (maxEdges != -1);
     }
-    int getMaxEdges() {
+    int getMaxEdges() const {
       return maxEdges;
     }
     // setter
+    void setMinstepType(frMinstepTypeEnum in) {
+      minstepType = in;
+    }
     void setInsideCorner(bool in) {
       insideCorner = in;
     }
@@ -171,6 +189,7 @@ namespace fr {
 
   protected:
     frCoord minStepLength;
+    frMinstepTypeEnum minstepType;
     frCoord maxLength;
     bool insideCorner;
     bool outsideCorner;
@@ -658,6 +677,26 @@ namespace fr {
     }
   protected:
     frCoord minSpacing;
+  };
+  
+  class frSpacingSamenetConstraint : public frSpacingConstraint {
+  public:
+    frSpacingSamenetConstraint(): frSpacingConstraint(), pgonly(false) {}
+    frSpacingSamenetConstraint(frCoord minSpacingIn, bool pgonlyIn): frSpacingConstraint(minSpacingIn), pgonly(pgonlyIn) {}
+    // getter
+    bool hasPGonly() const {
+      return pgonly;
+    }
+    // setter
+    void setPGonly(bool in) {
+      pgonly = in;
+    }
+    // check
+    frConstraintTypeEnum typeId() const override {
+      return frConstraintTypeEnum::frcSpacingSamenetConstraint;
+    }
+  protected:
+    bool pgonly;
   };
 
   // PARALLELEDGE
@@ -1308,6 +1347,9 @@ namespace fr {
     }
     frCoord findMin() const {
       return tbl.findMin();
+    }
+    frCoord findMax() const {
+      return tbl.findMax();
     }
     // setter
     void setLookupTbl(const fr2DLookupTbl<frCoord, frCoord, frCoord> &in) {

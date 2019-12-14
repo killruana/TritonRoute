@@ -131,7 +131,15 @@ namespace fr {
       tacTrack,
       tacPin,
       tacPathSeg,
-      tacVia
+      tacVia,
+      gccBlockObject,
+      gccNet,
+      gccPin,
+      gccEdge,
+      gccRect,
+      gccPolygon,
+      frcAccessPoint,
+      frcAccessPoints
   };
   //enum class drBlockObjectEnum {
   //  drcBlockObject = 0,
@@ -197,7 +205,9 @@ namespace fr {
     frcLef58SpacingEndOfLineWithinEndToEndConstraint, // not supported
     frcLef58SpacingEndOfLineWithinParallelEdgeConstraint, // not supported
     frcLef58SpacingEndOfLineWithinMaxMinLengthConstraint, // not supported
-    frcLef58CutClassConstraint // not supported
+    frcLef58CutClassConstraint, // not supported
+    frcNonSufficientMetalConstraint,
+    frcSpacingSamenetConstraint
   };
 
   enum class frMinimumcutConnectionEnum {
@@ -206,9 +216,16 @@ namespace fr {
     FROMBELOW = 1
   };
 
+  enum class frMinstepTypeEnum {
+    UNKNOWN = -1,
+    INSIDECORNER = 0,
+    OUTSIDECORNER = 1,
+    STEP = 2
+  };
+
   //enum class frDirEnum { UNKNOWN = 0, E = 1, S = 2, W = 3, N = 4, U = 5, D = 6 };
   //enum class frDirEnum { UNKNOWN = 0, E = 4, S = 2, W = 3, N = 1, U = 6, D = 5 };
-  #define OPPOSITEDIR 7
+  #define OPPOSITEDIR 7 // used in FlexGC_main.cpp
   enum class frDirEnum { UNKNOWN = 0, D = 1, S = 2, W = 3, E = 4, N = 5, U = 6 };
 
   enum class frLayerTypeEnum {
@@ -237,10 +254,24 @@ namespace fr {
     BLOCK
   };
 
-  enum class drNetOrderingEnum {
-    NETDRIVEN,
-    MARKERDRIVEN
+  // note: FlexPA hardcoded the cost, don't change here
+  enum class frAccessPointEnum {
+    frcOnGridAP   = 0,
+    frcHalfGridAP = 1,
+    frcCenterAP   = 2,
+    frcEncOptAP   = 3
   };
+
+  //enum class drNetOrderingEnum {
+  //  NETDRIVEN,
+  //  MARKERDRIVEN
+  //};
+
+  //enum class gcPinTypeEnum {
+  //  FIXED,
+  //  ROUTE,
+  //  MERGED
+  //};
 
   //enum frShapeEnum {
   //    frcRect    = 0,

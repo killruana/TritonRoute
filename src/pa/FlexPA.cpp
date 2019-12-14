@@ -26,4 +26,57 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "db/obj/frPin.h"
+#include <iostream>
+#include <sstream>
+#include <chrono>
+#include "FlexPA.h"
+#include "db/infra/frTime.h"
+#include "gc/FlexGC.h"
+
+using namespace std;
+using namespace fr;
+
+void FlexPA::init() {
+  initViaRawPriority();
+  initTrackCoords();
+
+  initUniqueInstance();
+  initPinAccess();
+}
+
+void FlexPA::prep() {
+  prepPoint();
+  revertAccessPoints();
+  prepPattern();
+}
+
+int FlexPA::main() {
+  //bool enableOutput = true;
+  frTime t;
+  if (VERBOSE > 0) {
+    cout <<endl <<endl <<"start pin access" <<endl;
+  }
+
+  init();
+  prep();
+
+  if (VERBOSE > 0) {
+    cout <<"#scanned instances    = " <<inst2unique.size()     <<endl;
+    cout <<"#unique  instances    = " <<uniqueInstances.size() <<endl;
+    cout <<"#stdCellGenAp         = " <<stdCellPinGenApCnt           <<endl;
+    cout <<"#stdCellValidPlanarAp = " <<stdCellPinValidPlanarApCnt   <<endl;
+    cout <<"#stdCellValidViaAp    = " <<stdCellPinValidViaApCnt      <<endl;
+    cout <<"#stdCellPinNoAp       = " <<stdCellPinNoApCnt            <<endl;
+    cout <<"#macroGenAp           = " <<macroCellPinGenApCnt         <<endl;
+    cout <<"#macroValidPlanarAp   = " <<macroCellPinValidPlanarApCnt <<endl;
+    cout <<"#macroValidViaAp      = " <<macroCellPinValidViaApCnt    <<endl;
+    cout <<"#macroNoAp            = " <<macroCellPinNoApCnt          <<endl;
+  }
+
+  if (VERBOSE > 0) {
+    cout <<endl <<"complete pin access" <<endl;
+    t.print();
+    cout <<endl;
+  }
+  return 0;
+}

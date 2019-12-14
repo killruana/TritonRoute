@@ -321,6 +321,8 @@ int io::Parser::getDefComponents(defrCallbackType_e type, defiComponent* comp, d
     ((io::Parser*)data)->numTerms++;
     instTerm->addToInst(tmpInst);
     instTerm->addTerm(term);
+    int pinCnt = term->getPins().size();
+    instTerm->setAPSize(pinCnt);
     tmpInst->addInstTerm(instTerm);
   }
   for (auto &uBlk: tmpInst->getRefBlock()->getBlockages()) {
@@ -3402,6 +3404,14 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
     //std::cout << "add shortConstraint to layer " <<tmpLayer->getName() << "\n";
     ((io::Parser*)data)->tech->addUConstraint(shortTempPtr);
     //tmpLayer->addConstraint(shortConstraint);
+    
+    // Add nsmetal rule for every layer
+    auto nsmetalConstraint = make_unique<frNonSufficientMetalConstraint>();
+    tmpLayer->setNonSufficientMetalConstraint(nsmetalConstraint.get());
+    unique_ptr<frConstraint> nsmetalTempPtr = std::move(nsmetalConstraint);
+    //std::cout << "add shortConstraint to layer " <<tmpLayer->getName() << "\n";
+    ((io::Parser*)data)->tech->addUConstraint(nsmetalTempPtr);
+    //tmpLayer->addConstraint(shortConstraint);
 
 
     //cout <<"number of props " <<layer->numProps() <<endl;
@@ -3467,15 +3477,20 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
             rptr->setInsideCorner(true);
             rptr->setOutsideCorner(false);
             rptr->setStep(false);
+            rptr->setMinstepType(frMinstepTypeEnum::INSIDECORNER);
           } else if (strcmp(layer->minstepType(i), "OUTSIDECORNER") == 0) {
             rptr->setInsideCorner(false);
             rptr->setOutsideCorner(true);
             rptr->setStep(false);
+            rptr->setMinstepType(frMinstepTypeEnum::OUTSIDECORNER);
           } else if (strcmp(layer->minstepType(i), "STEP") == 0) {
             rptr->setInsideCorner(false);
             rptr->setOutsideCorner(false);
             rptr->setStep(true);
+            rptr->setMinstepType(frMinstepTypeEnum::STEP);
           }
+        } else {
+           rptr->setMinstepType(frMinstepTypeEnum::OUTSIDECORNER);
         }
         if (layer->hasMinstepLengthsum(i)) {
           rptr->setMaxLength(frCoord(layer->minstepLengthsum(i) * ((io::Parser*)data)->tech->getDBUPerUU()));
@@ -3485,6 +3500,7 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
           rptr->setInsideCorner(true);
           rptr->setOutsideCorner(true);
           rptr->setStep(true);
+          rptr->setMinstepType(frMinstepTypeEnum::UNKNOWN);
         }
         rptr->setMinStepLength(layer->minstep(i) * ((io::Parser*)data)->tech->getDBUPerUU());
         ((io::Parser*)data)->tech->addUConstraint(uCon);
@@ -3548,7 +3564,21 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
         //  cout <<"eol size = " <<tmpLayer->getEolSpacing().size() <<endl;
         //}
       } else if (layer->hasSpacingSamenet(i)) {
-        cout <<" WARNING: hasSpacingSamenet unsupported" <<endl;
+        bool pgOnly = layer->hasSpacingSamenetPGonly(i);
+        if (enableOutput) {
+          cout <<"  SPACING " <<layer->spacing(i) <<" SAMENET ";
+          if (pgOnly) {
+            cout <<"PGONLY ";
+          }
+          cout <<endl;
+        }
+        unique_ptr<frConstraint> uCon = make_unique<frSpacingSamenetConstraint>(minSpacing, pgOnly);
+        auto rptr = uCon.get();
+        ((io::Parser*)data)->tech->addUConstraint(uCon);
+        if (tmpLayer->hasSpacingSamenet()) {
+          cout <<"Warning: new SPACING SAMENET overrides old SPACING SAMENET rule" <<endl;
+        }
+        tmpLayer->setSpacingSamenet(static_cast<frSpacingSamenetConstraint*>(rptr));
       } else if (layer->hasSpacingNotchLength(i)) {
         cout <<" WARNING: hasSpacingNotchLength unsupported" <<endl;
       } else if (layer->hasSpacingEndOfNotchWidth(i)) {
@@ -3562,9 +3592,18 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
         //((io::Parser*)data)->tech->addConstraint(spacingConstraint);
         //tmpLayer->addConstraint(spacingConstraint);
         // new
-        unique_ptr<frConstraint> uCon = make_unique<frSpacingConstraint>(minSpacing);
-        auto rptr = uCon.get();
+        //unique_ptr<frConstraint> uCon = make_unique<frSpacingConstraint>(minSpacing);
+        //auto rptr = uCon.get();
+        
+        frCollection<frCoord> rowVals(1, 0), colVals(1, 0);
+        frCollection<frCollection<frCoord> > tblVals(1, {minSpacing});
+        frString rowName("WIDTH"), colName("PARALLELRUNLENGTH");
+        unique_ptr<frConstraint> uCon = make_unique<frSpacingTablePrlConstraint>(fr2DLookupTbl(rowName, rowVals, colName, colVals, tblVals));
+        auto rptr = static_cast<frSpacingTablePrlConstraint*>(uCon.get());
         ((io::Parser*)data)->tech->addUConstraint(uCon);
+        if (tmpLayer->getMinSpacing()) {
+          cout <<"Warning: new SPACING overrides old SPACING rule" <<endl;
+        }
         tmpLayer->setMinSpacing(rptr);
       }
     }
@@ -3634,6 +3673,9 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
         //cout <<"@test " <<rptr->find(0.46*2000, 0.48*2000) / 2000.0 <<endl;
         //cout <<"@test " <<rptr->find(0.47*2000, 0.46*2000) / 2000.0 <<endl;
         ((io::Parser*)data)->tech->addUConstraint(uCon);
+        if (tmpLayer->getMinSpacing()) {
+          cout <<"Warning: new SPACINGTABLE PARALLELRUNLENGTH overrides old SPACING rule" <<endl;
+        }
         tmpLayer->setMinSpacing(rptr);
       } else { // two width spacing rule
         auto tw = spTable->twoWidths();
@@ -3691,6 +3733,9 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
         //cout <<"@test " <<rptr->find(0.000*2000, 0.000*2000, 0.000*2000) / 2000.0 <<endl;
         //cout <<"@test " <<rptr->find(0.000*2000, 0.000*2000, 0.300*2000) / 2000.0 <<endl;
         ((io::Parser*)data)->tech->addUConstraint(uCon);
+        if (tmpLayer->getMinSpacing()) {
+          cout <<"Warning: new SPACINGTABLE TWOWIDTHS overrides old SPACING rule" <<endl;
+        }
         tmpLayer->setMinSpacing(rptr);
         //vector<int> tttttest = {0,1,2,3,4,5,6,7};
         //auto it1 = upper_bound(tttttest.begin(), tttttest.end(), -1);
@@ -4044,7 +4089,7 @@ int io::Parser::getLefPins(lefrCallbackType_e type, lefiPin* pin, lefiUserData d
     frLayerNum layerNum = -1;
     for (int j = 0; j < numItems; ++j) {
       itemType = pin->port(i)->itemType(j);
-      if (itemType == 1) {
+      if (itemType == lefiGeomLayerE) {
         string layer = pin->port(i)->getLayer(j);
         if (((io::Parser*)data)->tech->name2layer.find(layer) == ((io::Parser*)data)->tech->name2layer.end()) {
           if (VERBOSE > -1) {
@@ -4060,7 +4105,7 @@ int io::Parser::getLefPins(lefrCallbackType_e type, lefiPin* pin, lefiUserData d
           cout <<"    LAYER " <<layer <<" ;" <<endl;
         }
         //cout <<"    LAYERNUM " <<layerNum <<" ;" <<endl;
-      } else if (itemType == 8) {
+      } else if (itemType == lefiGeomRectE) {
         if (layerNum == -1) {
           continue;
         }
@@ -4091,7 +4136,7 @@ int io::Parser::getLefPins(lefrCallbackType_e type, lefiPin* pin, lefiUserData d
                                <<yh * 1.0 / ((io::Parser*)data)->tech->getDBUPerUU() <<" ;" <<endl;
         }
              
-      } else if (itemType == 10) {
+      } else if (itemType == lefiGeomPolygonE) {
         if (layerNum == -1) {
           continue;
         }
@@ -4133,7 +4178,7 @@ int io::Parser::getLefPins(lefrCallbackType_e type, lefiPin* pin, lefiUserData d
         }
       } else {
         if (VERBOSE > -1) {
-          cout <<"unsupported lefiGeometries!" <<endl;
+          cout <<"Error: unsupported lefiGeometries in getLefPins!" <<endl;
         }
         continue;
         // exit(2);
@@ -4163,7 +4208,8 @@ int io::Parser::getLefObs(lefrCallbackType_e type, lefiObstruction* obs, lefiUse
     exit(1);
   }
 
-  vector<unique_ptr<frBlockage> > blks;
+  //vector<unique_ptr<frBlockage> > blks;
+  //frPin* pin = make_unique<frPin>():
 
   if (enableOutput) {
     cout <<"  OBS" <<endl;
@@ -4171,6 +4217,15 @@ int io::Parser::getLefObs(lefrCallbackType_e type, lefiObstruction* obs, lefiUse
   
   auto geometry = obs->geometries();
   int numItems  = geometry->numItems();
+
+
+  // blockage
+  auto blkIn = make_unique<frBlockage>();
+  blkIn->setId(((io::Parser*)data)->numBlockages);
+  ((io::Parser*)data)->numBlockages++;
+  // pin
+  auto pinIn = make_unique<frPin>();
+  pinIn->setId(0);
   
   string layer = "";
   frLayerNum layerNum = -1;
@@ -4199,33 +4254,87 @@ int io::Parser::getLefObs(lefrCallbackType_e type, lefiObstruction* obs, lefiUse
       frCoord yl = round(rect->yl * ((io::Parser*)data)->tech->getDBUPerUU());
       frCoord xh = round(rect->xh * ((io::Parser*)data)->tech->getDBUPerUU());
       frCoord yh = round(rect->yh * ((io::Parser*)data)->tech->getDBUPerUU());
-      frBox box(xl, yl, xh, yh);
-      xl = box.left();
-      yl = box.bottom();
-      xh = box.right();
-      yh = box.top();
-      vector<frPoint> points;
-      points.push_back(frPoint(xl,yl));
-      points.push_back(frPoint(xh,yl));
-      points.push_back(frPoint(xh,yh));
-      points.push_back(frPoint(xl,yh));
-      auto blk = make_unique<frLayerBlockage>();
-      blk->setId(((io::Parser*)data)->numBlockages);
-      ((io::Parser*)data)->numBlockages++;
-      blk->setLayerNum(layerNum);
-      blk->setPoints(points);
-      blks.push_back(std::move(blk));
+      // pinFig
+      unique_ptr<frRect> pinFig = make_unique<frRect>();
+      pinFig->setBBox(frBox(xl, yl, xh, yh));
+      pinFig->addToPin(pinIn.get());
+      pinFig->setLayerNum(layerNum);
+      // pinFig completed
+      // pin
+      unique_ptr<frPinFig> uptr(std::move(pinFig));
+      pinIn->addPinFig(uptr);
+      Rectangle pinFigRect(xl, yl, xh, yh);
+      // std::cout << "(" << xl << ", " << yl << ") -- (" << xh << ", " << yh << ")\n";
+      pinIn->addLayerShape(layerNum, pinFigRect);
+      // pin completed
       if (enableOutput) {
         cout <<"      RECT " <<rect->xl <<" " <<rect->yl <<" " <<rect->xh <<" " <<rect->yh <<" ;" <<endl;
       }
+    } else if (geometry->itemType(i) == lefiGeomPolygonE) {
+      if (layerNum == -1) {
+        // cout <<"Warning: OBS on undefined layer " <<" is skipped... " <<endl; 
+        continue;
+      }
+      std::vector<frPoint> tmpPoints;
+      for (int k = 0; k < geometry->getPolygon(i)->numPoints; k++) {
+        frCoord x = round(geometry->getPolygon(i)->x[k] * ((io::Parser*)data)->tech->getDBUPerUU());
+        frCoord y = round(geometry->getPolygon(i)->y[k] * ((io::Parser*)data)->tech->getDBUPerUU());
+        tmpPoints.push_back(frPoint(x, y));
+        if (enableOutput) {
+           cout <<" " <<x * 1.0 / ((io::Parser*)data)->tech->getDBUPerUU() <<" " 
+                      <<y * 1.0 / ((io::Parser*)data)->tech->getDBUPerUU();
+        }
+      }
+      // pinFig
+      unique_ptr<frPolygon> pinFig = make_unique<frPolygon>();
+      pinFig->setPoints(tmpPoints);
+      pinFig->addToPin(pinIn.get());
+      pinFig->setLayerNum(layerNum);
+      // pinFig completed
+      // pin
+      unique_ptr<frPinFig> uptr(std::move(pinFig));
+      pinIn->addPinFig(uptr);
+      Polygon pinFigPoly;
+      std::vector<Point> boostPolyPoints;
+      for (auto &pt: tmpPoints) {
+        boostPolyPoints.push_back(Point(pt.x(), pt.y()));
+        // std::cout << pt.x() << " " << pt.y() << "\n";
+      }
+      boost::polygon::set_points(pinFigPoly, boostPolyPoints.begin(), boostPolyPoints.end());
+      pinIn->addLayerShape(layerNum, pinFigPoly);
+      // pin completed
+    } else if (geometry->itemType(i) == lefiGeomLayerMinSpacingE) {
+      if (layerNum == -1) {
+        // cout <<"Warning: OBS on undefined layer " <<" is skipped... " <<endl; 
+        continue;
+      }
+      frCoord x = round(geometry->getLayerMinSpacing(i) * ((io::Parser*)data)->tech->getDBUPerUU());
+      if (enableOutput) {
+         cout <<"      MINSPACING " <<x * 1.0 / ((io::Parser*)data)->tech->getDBUPerUU() <<" ;" <<endl;
+      }
+      //blkIn->setSpacing(layerNum, x);
+    } else if (geometry->itemType(i) == lefiGeomLayerRuleWidthE) {
+      if (layerNum == -1) {
+        // cout <<"Warning: OBS on undefined layer " <<" is skipped... " <<endl; 
+        continue;
+      }
+      frCoord x = round(geometry->getLayerRuleWidth(i) * ((io::Parser*)data)->tech->getDBUPerUU());
+      if (enableOutput) {
+         cout <<"      DESIGNRULEWIDTH " <<x * 1.0 / ((io::Parser*)data)->tech->getDBUPerUU() <<" ;" <<endl;
+      }
+      //blkIn->setDesignRuleWidth(layerNum, x);
     } else {
-      if (VERBOSE > 2) {
-        cout <<"Warning: unsupported OBS" <<endl;
+      if (VERBOSE > -1) {
+        cout <<"Error: unsupported lefiGeometries in getLefObs" <<endl;
       }
       continue;
     }
   }
-  ((io::Parser*)data)->tmpBlock->setBlockages(blks);
+  if (enableOutput) {
+    cout <<"  END" <<endl;
+  }
+  blkIn->setPin(pinIn);
+  ((io::Parser*)data)->tmpBlock->addBlockage(blkIn);
   return 0;
 }
 
@@ -5092,7 +5201,9 @@ void io::Writer::fillConnFigs(bool isTA) {
 
 void io::Writer::writeFromTA() {
   fillConnFigs(true);
-  writeDef(true);
+  if (OUTTA_FILE != string("")) {
+    writeDef(true);
+  }
 }
 
 void io::Writer::writeFromDR(const string &str) {

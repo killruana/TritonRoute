@@ -44,6 +44,7 @@ void fr::DRCWorker::setup() {
   // printEdgeRTree();
   setupMaxRectRTree();
   setupCutRectRTree();
+  //std::cout <<"#drcNets = " <<drcNets.size() <<std::endl;
 }
 
 void fr::DRCWorker::setupCutRectRTree() {
