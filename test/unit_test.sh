@@ -33,7 +33,7 @@ test_script=./run.sh
 test_root=$(pwd)
 
 if [ "$#" -ne 1 ]; then
-    echo "Usage: ./unit_test.sh <path_to_bin> (e.g., ./unit_test.sh ../TritonRoute)"
+    echo "Usage: ./unit_test.sh <path_to_bin> (e.g., ./unit_test.sh ../build/TritonRoute)"
   exit 1
 fi
 
