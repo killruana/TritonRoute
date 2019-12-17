@@ -1,4 +1,4 @@
-FROM centos:centos6 AS builder
+FROM centos:centos6 AS base-dependencies
 
 # install gcc 8
 RUN yum -y install centos-release-scl && \
@@ -31,12 +31,13 @@ RUN wget https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.
     ./bootstrap.sh && \
     ./b2 install
 
+FROM base-dependencies AS builder
+
 COPY . /TritonRoute
 RUN mkdir TritonRoute/build
 WORKDIR /TritonRoute/build
 RUN cmake ..
 RUN make
-
 
 FROM centos:centos6 AS runner
 RUN yum update -y && yum install -y tcl-devel
