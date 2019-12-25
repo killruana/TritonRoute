@@ -844,7 +844,9 @@ void FlexPA::prepPoint_pin_checkPoints(vector<unique_ptr<frAccessPoint> > &aps,
 }
 
 void FlexPA::prepPoint_pin_updateStat(const vector<unique_ptr<frAccessPoint> > &tmpAps, frPin* pin, frInstTerm* instTerm) {
-  bool isStdCellPin   = (instTerm && instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE);
+  bool isStdCellPin   = (instTerm && (instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE ||
+                                      instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE_TIEHIGH ||
+                                      instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE_TIELOW));
   bool isMacroCellPin = (instTerm && instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::BLOCK);
   //bool hasAccess = false;
   for (auto &ap: tmpAps) {
@@ -875,7 +877,9 @@ bool FlexPA::prepPoint_pin_helper(vector<unique_ptr<frAccessPoint> > &aps,
                                   set<pair<frPoint, frLayerNum> > &apset,
                                   vector<gtl::polygon_90_set_data<frCoord> > &pinShapes,
                                   frPin* pin, frInstTerm* instTerm, int lowerType, int upperType) {
-  bool isStdCellPin   = (instTerm && instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE);
+  bool isStdCellPin   = (instTerm && (instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE ||
+                                      instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE_TIEHIGH ||
+                                      instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE_TIELOW));
   bool isMacroCellPin = (instTerm && instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::BLOCK);
   vector<unique_ptr<frAccessPoint> > tmpAps;
   prepPoint_pin_genPoints(tmpAps, apset, pin, instTerm, pinShapes, lowerType, upperType);
@@ -932,7 +936,9 @@ void FlexPA::prepPoint_pin(frPin* pin, frInstTerm* instTerm) {
   // before checkPoints, ap->hasAccess(dir) indicates whether to check drc 
   vector<unique_ptr<frAccessPoint> > aps;
   set<pair<frPoint, frLayerNum> > apset;
-  bool isStdCellPin   = (instTerm && instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE);
+  bool isStdCellPin   = (instTerm && (instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE ||
+                                      instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE_TIEHIGH ||
+                                      instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE_TIELOW));
   bool isMacroCellPin = (instTerm && instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::BLOCK);
   
   vector<gtl::polygon_90_set_data<frCoord> > pinShapes;
@@ -1035,7 +1041,9 @@ void FlexPA::prepPoint() {
   int cnt = 0;
   for (auto &inst: uniqueInstances) {
     // only do for core and block cells
-    if (inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE &&
+    if (inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE && 
+        inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE_TIEHIGH && 
+        inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE_TIELOW && 
         inst->getRefBlock()->getMacroClass() != MacroClassEnum::BLOCK) {
       continue;
     }
@@ -1095,7 +1103,9 @@ void FlexPA::prepPattern() {
   int cnt = 0;
   for (auto &inst: uniqueInstances) {
     // only do for core and block cells
-    if (inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE) {
+    if (inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE && 
+        inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE_TIEHIGH && 
+        inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE_TIELOW) {
       currUniqueInstIdx++;
       continue;
     }
@@ -1547,7 +1557,9 @@ void FlexPA::addAccessPatternObj(frInst* inst,
 
 void FlexPA::getInsts(std::vector<frInst*> &insts) {
   for (auto &inst: design->getTopBlock()->getInsts()) {
-    if (inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE) {
+    if (inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE && 
+        inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE_TIEHIGH && 
+        inst->getRefBlock()->getMacroClass() != MacroClassEnum::CORE_TIELOW) {
       continue;
     }
     bool isSkip = true;
