@@ -110,7 +110,7 @@ namespace fr {
     void prep();
     void prepPoint();
     void prepPoint_pin(frPin *pin, frInstTerm* instTerm = nullptr);
-    void prepPoint_pin_mergePinShapes(std::vector<gtl::polygon_90_set_data<frCoord> > &pinShapes, frPin* pin, frInstTerm* instTerm);
+    void prepPoint_pin_mergePinShapes(std::vector<gtl::polygon_90_set_data<frCoord> > &pinShapes, frPin* pin, frInstTerm* instTerm, bool isShrink = false);
     // type 0 -- on-grid; 1 -- half-grid; 2 -- center; 3 -- via-enc-opt
     void prepPoint_pin_genPoints(std::vector<std::unique_ptr<frAccessPoint> > &aps, std::set<std::pair<frPoint, frLayerNum> > &apset, frPin* pin, 
                                  frInstTerm* instTerm, const std::vector<gtl::polygon_90_set_data<frCoord> > &pinShapes, int lowerType, int upperType);

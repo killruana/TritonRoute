@@ -39,7 +39,7 @@ using namespace fr;
 
 int gcCallCnt = 0;
 
-void FlexPA::prepPoint_pin_mergePinShapes(vector<gtl::polygon_90_set_data<frCoord> > &pinShapes, frPin* pin, frInstTerm* instTerm) {
+void FlexPA::prepPoint_pin_mergePinShapes(vector<gtl::polygon_90_set_data<frCoord> > &pinShapes, frPin* pin, frInstTerm* instTerm, bool isShrink) {
   frInst* inst = nullptr;
   if (instTerm) {
     inst = instTerm->getInst();
@@ -48,6 +48,14 @@ void FlexPA::prepPoint_pin_mergePinShapes(vector<gtl::polygon_90_set_data<frCoor
   frTransform xform;
   if (inst) {
     inst->getUpdatedXform(xform);
+  }
+
+  vector<frCoord> layerWidths;
+  if (isShrink) {
+    layerWidths.resize(getDesign()->getTech()->getLayers().size(), 0);
+    for (int i = 0; i < int(layerWidths.size()); i++) {
+      layerWidths[i] = getDesign()->getTech()->getLayer(i)->getWidth();
+    }
   }
 
   pinShapes.clear();
@@ -60,6 +68,13 @@ void FlexPA::prepPoint_pin_mergePinShapes(vector<gtl::polygon_90_set_data<frCoor
       obj->getBBox(box);
       box.transform(xform);
       gtl::rectangle_data<frCoord> rect(box.left(), box.bottom(), box.right(), box.top());
+      if (isShrink) {
+        if (getDesign()->getTech()->getLayer(layerNum)->getDir() == frcHorzPrefRoutingDir) {
+          gtl::shrink(rect, gtl::VERTICAL, layerWidths[layerNum] / 2);
+        } else if (getDesign()->getTech()->getLayer(layerNum)->getDir() == frcVertPrefRoutingDir) {
+          gtl::shrink(rect, gtl::HORIZONTAL, layerWidths[layerNum] / 2);
+        }
+      }
       using namespace boost::polygon::operators;
       pinShapes[layerNum] += rect;
     } else if (shape->typeId() == frcPolygon) {
@@ -315,7 +330,9 @@ void FlexPA::prepPoint_pin_genPoints_layerShapes(vector<unique_ptr<frAccessPoint
   }
   bool allowPlanar = true;
   if (instTerm) {
-    if (instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE) {
+    if (instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE ||
+        instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE_TIEHIGH ||
+        instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::CORE_TIELOW) {
       if (layerNum >= VIAONLY_STDCELLPIN_BOTTOMLAYERNUM && layerNum <= VIAONLY_STDCELLPIN_TOPLAYERNUM) {
         allowPlanar = false;
       }
@@ -942,7 +959,11 @@ void FlexPA::prepPoint_pin(frPin* pin, frInstTerm* instTerm) {
   bool isMacroCellPin = (instTerm && instTerm->getInst()->getRefBlock()->getMacroClass() == MacroClassEnum::BLOCK);
   
   vector<gtl::polygon_90_set_data<frCoord> > pinShapes;
-  prepPoint_pin_mergePinShapes(pinShapes, pin, instTerm);
+  if (isMacroCellPin) {
+    prepPoint_pin_mergePinShapes(pinShapes, pin, instTerm, true);
+  } else {
+    prepPoint_pin_mergePinShapes(pinShapes, pin, instTerm);
+  }
 
   // 0 iter, gen on-grid, on-grid points
   //cout <<"iter0" <<endl;
