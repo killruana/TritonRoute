@@ -1910,11 +1910,22 @@ void FlexDRWorker::initNets_numPinsIn() {
   frPoint pt;
   for (auto &net: nets) {
     for (auto &pin: net->getPins()) {
+      bool hasPrefAP = false;
+      drAccessPattern *firstAP = nullptr;
       for (auto &ap: pin->getAccessPatterns()) {
-        ap->getPoint(pt);
-        //pinRegionQuery.insert(make_pair(box_t(point_t(pt.x(), pt.y()), point_t(pt.x(), pt.y())), pin.get()));
+        if (firstAP == nullptr) {
+          firstAP = ap.get();
+        }
+        if (ap->getPinCost() == 0) {
+          ap->getPoint(pt);
+          allPins.push_back(make_pair(box_t(point_t(pt.x(), pt.y()), point_t(pt.x(), pt.y())), pin.get()));
+          hasPrefAP = true;
+          break;
+        }
+      }
+      if (!hasPrefAP) {
+        firstAP->getPoint(pt);
         allPins.push_back(make_pair(box_t(point_t(pt.x(), pt.y()), point_t(pt.x(), pt.y())), pin.get()));
-        break;
       }
     }
   }
@@ -3535,10 +3546,25 @@ void FlexDRWorker::initMazeCost_via_helper(drNet* net, bool isAddPathCost) {
     if (pin->getFrTerm() == nullptr) {
       continue;
     }
+    // MACRO pin does not prefer via access
+    // bool macroPinViaBlock = false;
+    auto dPinTerm = pin->getFrTerm();
+    if (isAddPathCost == false && dPinTerm->typeId() == frcInstTerm) {
+      frInstTerm *instTerm = static_cast<frInstTerm*>(dPinTerm);
+      frInst *inst = instTerm->getInst();
+      if (inst->getRefBlock()->getMacroClass() == MacroClassEnum::BLOCK) {
+        continue;
+      }
+    }
+
     for (auto &ap: pin->getAccessPatterns()) {
       if (!ap->hasAccessViaDef(frDirEnum::U)) {
         continue;
       }
+      // if (isAddPathCost == false && ap->getPinCost() != 0) {
+      //   continue;
+      // }
+
       ap->getPoint(bp);
       auto lNum = ap->getBeginLayerNum();
       frViaDef* viaDef = ap->getAccessViaDef();
@@ -3593,6 +3619,37 @@ void FlexDRWorker::initMazeCost_via_helper(drNet* net, bool isAddPathCost) {
       //}
 
 
+    }
+  }
+}
+
+
+// TODO: replace l1Box / l2Box calculation with via get bounding box function
+void FlexDRWorker::initMazeCost_minCut_helper(drNet *net, bool isAddPathCost) {
+  int modType = isAddPathCost ? 1 : 0;
+  for (auto &connFig: net->getExtConnFigs()) {
+    if (QUICKDRCTEST) {
+      cout << "  initMazeCost_minCut_helper " << net->getFrNet()->getName();
+    }
+    if (connFig->typeId() == drcVia) {
+      auto via = static_cast<drVia*>(connFig.get());
+      frBox l1Box, l2Box;
+      frTransform xform;
+      via->getTransform(xform);
+
+      auto l1Num = via->getViaDef()->getLayer1Num();
+      auto l1Fig = (via->getViaDef()->getLayer1Figs()[0].get());
+      l1Fig->getBBox(l1Box);
+      l1Box.transform(xform);
+      modMinimumcutCostVia(l1Box, gridGraph.getMazeZIdx(l1Num), modType, true);
+      modMinimumcutCostVia(l1Box, gridGraph.getMazeZIdx(l1Num), modType, false);
+      
+      auto l2Num = via->getViaDef()->getLayer2Num();
+      auto l2Fig = (via->getViaDef()->getLayer2Figs()[0].get());
+      l2Fig->getBBox(l2Box);
+      l2Box.transform(xform);
+      modMinimumcutCostVia(l2Box, gridGraph.getMazeZIdx(l2Num), modType, true);
+      modMinimumcutCostVia(l2Box, gridGraph.getMazeZIdx(l2Num), modType, false);
     }
   }
 }

@@ -555,6 +555,9 @@ void FlexDRWorker::modMinimumcutCostVia(const frBox &box, frMIdx z, int type, bo
       frCoord dist = 0;
       if (con->hasLength()) {
         dist = con->getDistance();
+        // conservative for macro pin
+        // TODO: revert the += to be more accurate and check qor change
+        dist += getDesign()->getTech()->getLayer(lNum)->getPitch();
       }
       // assumes width always > 2
       bx.set(box.left()   - dist - (viaBox.right() - 0) + 1, 
@@ -590,7 +593,7 @@ void FlexDRWorker::modMinimumcutCostVia(const frBox &box, frMIdx z, int type, bo
               continue;
             }
           } else {
-            if (dx > 0 && dy > 0 && dx + dy < con->getDistance()) {
+            if (dx > 0 && dy > 0 && dx + dy < dist) {
               ;
             } else {
               continue;
@@ -1622,6 +1625,8 @@ void FlexDRWorker::mazeNetInit(drNet* net) {
   if (isFollowGuide()) {
     initMazeCost_guide_helper(net, true);
   }
+  // add minimum cut cost from objs in ext ring when the net is about to route
+  initMazeCost_minCut_helper(net, true);
   initMazeCost_ap_helper(net, false);
   initMazeCost_boundary_helper(net, false);
 }
@@ -1630,6 +1635,8 @@ void FlexDRWorker::mazeNetEnd(drNet* net) {
   if (isFollowGuide()) {
     initMazeCost_guide_helper(net, false);
   }
+  // sub minimum cut cost from vias in ext ring when the net is about to end
+  initMazeCost_minCut_helper(net, false);
   initMazeCost_ap_helper(net, true);
   initMazeCost_boundary_helper(net, true);
 }

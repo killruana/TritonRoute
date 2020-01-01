@@ -572,6 +572,7 @@ namespace fr {
     void initMazeCost_marker_fixMode_3_ripupNets(const frMarker &marker);
     //void initMazeCost_via();
     void initMazeCost_via_helper(drNet* net, bool isAddPathCost);
+    void initMazeCost_minCut_helper(drNet* net, bool isAddPathCost);
     void initMazeCost_guide_helper(drNet* net, bool isAdd);
     void initMazeCost_ap_helper(drNet* net, bool isAddPathCost);
     void initMazeCost_ap_planar_helper(const FlexMazeIdx &mi, const frDirEnum &dir, frCoord bloatLen, bool isAddPathCost);
