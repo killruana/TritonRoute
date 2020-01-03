@@ -1138,6 +1138,69 @@ void FlexGCWorker::checkMetalShape_offGrid(gcPin* pin) {
   }
 }
 
+void FlexGCWorker::checkMetalShape_minEnclosedArea(gcPin* pin) {
+  bool enableOutput = false;
+  auto net = pin->getNet();
+  auto poly = pin->getPolygon();
+  auto layerNum = poly->getLayerNum();
+  if (getDesign()->getTech()->getLayer(layerNum)->hasMinEnclosedArea()) {
+    for (auto holeIt = poly->begin_holes(); holeIt != poly->end_holes(); holeIt++) {
+      auto &hole_poly = *holeIt;
+      for (auto con: getDesign()->getTech()->getLayer(layerNum)->getMinEnclosedAreaConstraints()) {
+        auto reqArea = con->getArea();
+        if (gtl::area(hole_poly) < reqArea) {
+          auto &polys = net->getPolygons(layerNum, false);
+          using namespace boost::polygon::operators;
+          auto intersection_polys = polys & (*poly);
+          if (gtl::empty(intersection_polys)) {
+            continue;
+          }
+          // create marker
+          gtl::rectangle_data<frCoord> markerRect;
+          gtl::extents(markerRect, hole_poly);
+
+          auto marker = make_unique<frMarker>();
+          frBox box(gtl::xl(markerRect), gtl::yl(markerRect), gtl::xh(markerRect), gtl::yh(markerRect));
+          marker->setBBox(box);
+          marker->setLayerNum(layerNum);
+          marker->setConstraint(con);
+          marker->addSrc(net->getOwner());
+          if (addMarker(marker)) {
+            if (enableOutput) {
+              double dbu = getDesign()->getTopBlock()->getDBUPerUU();
+              
+              cout << "MinHole@(";
+              cout <<gtl::xl(markerRect) / dbu <<", " <<gtl::yl(markerRect) / dbu <<") ("
+                   <<gtl::xh(markerRect) / dbu <<", " <<gtl::yh(markerRect) / dbu <<") "
+                   <<getDesign()->getTech()->getLayer(layerNum)->getName() <<" ";
+              auto owner = net->getOwner();
+              if (owner == nullptr) {
+                cout <<"FLOATING";
+              } else {
+                if (owner->typeId() == frcNet) {
+                  cout <<static_cast<frNet*>(owner)->getName();
+                } else if (owner->typeId() == frcInstTerm) {
+                  cout <<static_cast<frInstTerm*>(owner)->getInst()->getName() <<"/" 
+                       <<static_cast<frInstTerm*>(owner)->getTerm()->getName();
+                } else if (owner->typeId() == frcTerm) {
+                  cout <<"PIN/" <<static_cast<frTerm*>(owner)->getName();
+                } else if (owner->typeId() == frcInstBlockage) {
+                  cout <<static_cast<frInstBlockage*>(owner)->getInst()->getName() <<"/OBS";
+                } else if (owner->typeId() == frcBlockage) {
+                  cout <<"PIN/OBS";
+                } else {
+                  cout <<"UNKNOWN";
+                }
+              }
+              cout << endl;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 void FlexGCWorker::checkMetalShape_main(gcPin* pin) {
   //bool enableOutput = true;
 
@@ -1167,6 +1230,9 @@ void FlexGCWorker::checkMetalShape_main(gcPin* pin) {
 
   // off grid
   checkMetalShape_offGrid(pin);
+
+  // min hole
+  checkMetalShape_minEnclosedArea(pin);
 }
 
 void FlexGCWorker::checkMetalShape() {

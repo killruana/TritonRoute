@@ -1746,6 +1746,8 @@ void FlexDR::reportDRC() {
             drcRpt <<"MetSpc";
           } else if (con->typeId() == frConstraintTypeEnum::frcOffGridConstraint) {
             drcRpt <<"OffGrid";
+          } else if (con->typeId() == frConstraintTypeEnum::frcMinEnclosedAreaConstraint) {
+            drcRpt <<"MinHole";
           } else {
             drcRpt << "unknown";
           }

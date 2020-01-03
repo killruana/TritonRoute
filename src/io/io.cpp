@@ -3515,6 +3515,24 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
       }
     }
 
+    // read minHole rule
+    for (int i = 0; i < layer->numMinenclosedarea(); ++i) {
+      frCoord minEnclosedArea = frCoord(round(layer->minenclosedarea(i) * ((io::Parser*)data)->tech->getDBUPerUU() * ((io::Parser*)data)->tech->getDBUPerUU()));
+      frCoord minEnclosedWidth = -1;
+      if (layer->hasMinenclosedareaWidth(i)) {
+        minEnclosedWidth = frCoord(round(layer->minenclosedareaWidth(i) * ((io::Parser*)data)->tech->getDBUPerUU()));
+        cout << "Warning: minEnclosedArea constraint with width is not supported, skipped\n";
+        continue;
+      }
+      auto minEnclosedAreaConstraint = make_unique<frMinEnclosedAreaConstraint>(minEnclosedArea);
+      if (minEnclosedWidth != -1) {
+        minEnclosedAreaConstraint->setWidth(minEnclosedWidth);
+      }
+      tmpLayer->addMinEnclosedAreaConstraint(minEnclosedAreaConstraint.get());
+      unique_ptr<frConstraint> minEnclosedAreaTempPtr = std::move(minEnclosedAreaConstraint);
+      ((io::Parser*)data)->tech->addUConstraint(minEnclosedAreaTempPtr);
+    }
+
     // read spacing rule
     for (int i = 0; i < layer->numSpacing(); ++i) {
       //std::shared_ptr<frSpacingConstraint> minSpacingCosntraint;

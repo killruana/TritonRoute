@@ -126,6 +126,38 @@ namespace fr {
     }
   };
 
+  // minHole
+  class frMinEnclosedAreaConstraint : public frConstraint {
+  public:
+    // constructor
+    frMinEnclosedAreaConstraint() : area(-1), width(-1) {}
+    frMinEnclosedAreaConstraint(frCoord areaIn) : area(areaIn), width(-1) {}
+    // getter
+    frCoord getArea() const {
+      return area;
+    }
+    bool hasWidth() const {
+      return (width != -1);
+    }
+    frCoord getWidth() const {
+      return width;
+    }
+    // setter
+    void setArea(frCoord &areaIn) {
+      area = areaIn;
+    }
+    void setWidth(frCoord &widthIn) {
+      width = widthIn;
+    }
+
+    frConstraintTypeEnum typeId() const override {
+      return frConstraintTypeEnum::frcMinEnclosedAreaConstraint;
+    }
+
+  protected:
+    frCoord area, width;
+  };
+
   // minStep
   class frMinStepConstraint : public frConstraint {
   public:

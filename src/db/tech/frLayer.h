@@ -45,7 +45,7 @@ namespace fr {
     // constructor
     frLayer(): pitch(0), width(0), defaultViaDef(nullptr), minSpc(nullptr), spacingSamenet(nullptr), 
                eols(), cutConstraints(), cutSpacingSamenetConstraints(),
-               shortConstraint(nullptr), 
+               shortConstraint(nullptr), offGridConstraint(nullptr), minEnclosedAreaConstraints(),
                nonSufficientMetalConstraint(nullptr), areaConstraint(nullptr), minStepConstraint(nullptr), minWidthConstraint(nullptr),
                minimumcutConstraints() {}
     frLayer(frLayerNum layerNumIn, const frString &nameIn): layerNum(layerNumIn), name(nameIn), pitch(0), width(0), minWidth(-1), defaultViaDef(nullptr),
@@ -308,6 +308,16 @@ namespace fr {
       return (!minimumcutConstraints.empty());
     }
 
+    void addMinEnclosedAreaConstraint(frMinEnclosedAreaConstraint* in) {
+      minEnclosedAreaConstraints.push_back(in);
+    }
+    const std::vector<frMinEnclosedAreaConstraint*>& getMinEnclosedAreaConstraints() const {
+      return minEnclosedAreaConstraints;
+    }
+    bool hasMinEnclosedArea() const {
+      return (!minEnclosedAreaConstraints.empty());
+    }
+
   protected:
     frLayerTypeEnum                                                 type;
     frLayerNum                                                      layerNum;
@@ -330,6 +340,7 @@ namespace fr {
     std::vector<frCutSpacingConstraint*>                            cutSpacingSamenetConstraints;
     frShortConstraint*                                              shortConstraint;
     frOffGridConstraint*                                            offGridConstraint;
+    std::vector<frMinEnclosedAreaConstraint*>                       minEnclosedAreaConstraints;
     frNonSufficientMetalConstraint*                                 nonSufficientMetalConstraint;
     frAreaConstraint*                                               areaConstraint;
     frMinStepConstraint*                                            minStepConstraint;
