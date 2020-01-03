@@ -118,6 +118,14 @@ namespace fr {
     }
   };
 
+  // offGrid
+  class frOffGridConstraint : public frConstraint {
+  public:
+    frConstraintTypeEnum typeId() const override {
+      return frConstraintTypeEnum::frcOffGridConstraint;
+    }
+  };
+
   // minStep
   class frMinStepConstraint : public frConstraint {
   public:

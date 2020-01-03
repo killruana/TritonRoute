@@ -194,6 +194,7 @@ namespace fr {
     frcCutSpacingConstraint = 17,
     frcMinStepConstraint,
     frcMinimumcutConstraint,
+    frcOffGridConstraint,
     frcLef58CornerSpacingConstraint, // not supported
     frcLef58CornerSpacingConcaveCornerConstraint, // not supported
     frcLef58CornerSpacingConvexCornerConstraint, // not supported

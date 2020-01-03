@@ -1078,6 +1078,66 @@ void FlexGCWorker::checkMetalShape_minStep(gcPin* pin) {
   }
 }
 
+void FlexGCWorker::checkMetalShape_offGrid(gcPin* pin) {
+  bool enableOutput = false;
+  auto net = pin->getNet();
+  auto mGrid = getDesign()->getTech()->getManufacturingGrid();
+  for (auto &rect: pin->getMaxRectangles()) {
+    auto maxRect = rect.get();
+    auto layerNum = maxRect->getLayerNum();
+    // off grid maxRect
+    if (gtl::xl(*maxRect) % mGrid || 
+        gtl::xh(*maxRect) % mGrid ||
+        gtl::yl(*maxRect) % mGrid ||
+        gtl::yh(*maxRect) % mGrid) {
+      // continue if the marker area does not have route shape
+      auto &polys = net->getPolygons(layerNum, false);
+      gtl::rectangle_data<frCoord> markerRect(*maxRect);
+      using namespace boost::polygon::operators;
+      auto intersection_polys = polys & markerRect;
+      if (gtl::empty(intersection_polys)) {
+        continue;
+      }
+      auto marker = make_unique<frMarker>();
+      frBox box(gtl::xl(markerRect), gtl::yl(markerRect), gtl::xh(markerRect), gtl::yh(markerRect));
+      marker->setBBox(box);
+      marker->setLayerNum(layerNum);
+      marker->setConstraint(getDesign()->getTech()->getLayer(layerNum)->getOffGridConstraint());
+      marker->addSrc(net->getOwner());
+      if (addMarker(marker)) {
+        if (enableOutput) {
+          double dbu = getDesign()->getTopBlock()->getDBUPerUU();
+          
+          cout << "OffGrid@(";
+          cout <<gtl::xl(markerRect) / dbu <<", " <<gtl::yl(markerRect) / dbu <<") ("
+               <<gtl::xh(markerRect) / dbu <<", " <<gtl::yh(markerRect) / dbu <<") "
+               <<getDesign()->getTech()->getLayer(layerNum)->getName() <<" ";
+          auto owner = net->getOwner();
+          if (owner == nullptr) {
+            cout <<"FLOATING";
+          } else {
+            if (owner->typeId() == frcNet) {
+              cout <<static_cast<frNet*>(owner)->getName();
+            } else if (owner->typeId() == frcInstTerm) {
+              cout <<static_cast<frInstTerm*>(owner)->getInst()->getName() <<"/" 
+                   <<static_cast<frInstTerm*>(owner)->getTerm()->getName();
+            } else if (owner->typeId() == frcTerm) {
+              cout <<"PIN/" <<static_cast<frTerm*>(owner)->getName();
+            } else if (owner->typeId() == frcInstBlockage) {
+              cout <<static_cast<frInstBlockage*>(owner)->getInst()->getName() <<"/OBS";
+            } else if (owner->typeId() == frcBlockage) {
+              cout <<"PIN/OBS";
+            } else {
+              cout <<"UNKNOWN";
+            }
+          }
+          cout << endl;
+        }
+      }
+    }
+  }
+}
+
 void FlexGCWorker::checkMetalShape_main(gcPin* pin) {
   //bool enableOutput = true;
 
@@ -1104,6 +1164,9 @@ void FlexGCWorker::checkMetalShape_main(gcPin* pin) {
 
   // min step
   checkMetalShape_minStep(pin);
+
+  // off grid
+  checkMetalShape_offGrid(pin);
 }
 
 void FlexGCWorker::checkMetalShape() {

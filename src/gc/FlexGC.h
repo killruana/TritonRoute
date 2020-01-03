@@ -232,6 +232,7 @@ namespace fr {
     void checkMetalShape();
     void checkMetalShape_main(gcPin* pin);
     void checkMetalShape_minWidth(const gtl::rectangle_data<frCoord> &rect, frLayerNum layerNum, gcNet* net, bool isH);
+    void checkMetalShape_offGrid(gcPin* pin);
     void checkMetalShape_minStep(gcPin* pin);
     void checkMetalShape_minStep_helper(const frBox &markerBox, frLayerNum layerNum, gcNet* net, frMinStepConstraint* con,
                                         bool hasInsideCorner, bool hasOutsideCorner, bool hasStep,

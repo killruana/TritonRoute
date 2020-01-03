@@ -1744,6 +1744,8 @@ void FlexDR::reportDRC() {
             drcRpt <<"NSMet";
           } else if (con->typeId() == frConstraintTypeEnum::frcSpacingSamenetConstraint) {
             drcRpt <<"MetSpc";
+          } else if (con->typeId() == frConstraintTypeEnum::frcOffGridConstraint) {
+            drcRpt <<"OffGrid";
           } else {
             drcRpt << "unknown";
           }

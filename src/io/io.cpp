@@ -3404,6 +3404,12 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
     //std::cout << "add shortConstraint to layer " <<tmpLayer->getName() << "\n";
     ((io::Parser*)data)->tech->addUConstraint(shortTempPtr);
     //tmpLayer->addConstraint(shortConstraint);
+
+    // Add off grid rule for every layer
+    auto offGridConstraint = make_unique<frOffGridConstraint>();
+    tmpLayer->setOffGridConstraint(offGridConstraint.get());
+    unique_ptr<frConstraint> offGridTempPtr = std::move(offGridConstraint);
+    ((io::Parser*)data)->tech->addUConstraint(offGridTempPtr);
     
     // Add nsmetal rule for every layer
     auto nsmetalConstraint = make_unique<frNonSufficientMetalConstraint>();

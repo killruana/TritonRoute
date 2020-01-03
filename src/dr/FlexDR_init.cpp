@@ -1230,6 +1230,14 @@ void FlexDRWorker::initNet_termGenAp_new(drPin* dPin) {
             frPoint pt(xLoc, yLoc);
             uap->setBeginLayerNum(currLayerNum);
             uap->setPoint(pt);
+            // to resolve temp AP end seg minArea patch problem
+            frCoord reqArea = 0;
+            auto minAreaConstraint = getDesign()->getTech()->getLayer(currLayerNum)->getAreaConstraint();
+            if (minAreaConstraint) {
+              auto reqArea = minAreaConstraint->getMinArea();
+              uap->setBeginArea(reqArea);
+            }
+
             if (!isInitDR() || xLoc != xh(routeRect) || yLoc != yh(routeRect)) {
               dPin->addAccessPattern(uap);
               break;
@@ -1298,6 +1306,14 @@ void FlexDRWorker::initNet_termGenAp_new(drPin* dPin) {
             frPoint pt(xLoc, yLoc);
             uap->setBeginLayerNum(currLayerNum);
             uap->setPoint(pt);
+            // to resolve temp AP end seg minArea patch problem
+            frCoord reqArea = 0;
+            auto minAreaConstraint = getDesign()->getTech()->getLayer(currLayerNum)->getAreaConstraint();
+            if (minAreaConstraint) {
+              auto reqArea = minAreaConstraint->getMinArea();
+              uap->setBeginArea(reqArea);
+            }
+
             dPin->addAccessPattern(uap);
             break;
           }
@@ -3561,7 +3577,8 @@ void FlexDRWorker::initMazeCost_via_helper(drNet* net, bool isAddPathCost) {
       if (!ap->hasAccessViaDef(frDirEnum::U)) {
         continue;
       }
-      // if (isAddPathCost == false && ap->getPinCost() != 0) {
+      
+      // if ((isInitDR() || getDRIter() <= 1) && isAddPathCost == false && ap->getPinCost() != 0) {
       //   continue;
       // }
 

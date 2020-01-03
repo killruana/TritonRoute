@@ -267,6 +267,12 @@ namespace fr {
     frShortConstraint* getShortConstraint() {
       return shortConstraint;
     }
+    void setOffGridConstraint(frOffGridConstraint* in) {
+      offGridConstraint = in;
+    }
+    frOffGridConstraint* getOffGridConstraint() {
+      return offGridConstraint;
+    }
     void setNonSufficientMetalConstraint(frNonSufficientMetalConstraint* in) {
       nonSufficientMetalConstraint = in;
     }
@@ -323,6 +329,7 @@ namespace fr {
     std::vector<frCutSpacingConstraint*>                            cutConstraints;
     std::vector<frCutSpacingConstraint*>                            cutSpacingSamenetConstraints;
     frShortConstraint*                                              shortConstraint;
+    frOffGridConstraint*                                            offGridConstraint;
     frNonSufficientMetalConstraint*                                 nonSufficientMetalConstraint;
     frAreaConstraint*                                               areaConstraint;
     frMinStepConstraint*                                            minStepConstraint;
