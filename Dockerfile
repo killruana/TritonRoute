@@ -1,4 +1,4 @@
-FROM centos:centos6 AS base-dependencies
+FROM centos:centos7 AS base-dependencies
 
 # install gcc 8
 RUN yum -y install centos-release-scl && \
@@ -9,14 +9,14 @@ ENV CC=/opt/rh/devtoolset-8/root/usr/bin/gcc \
     PATH=/opt/rh/devtoolset-8/root/usr/bin:$PATH \
     LD_LIBRARY_PATH=/opt/rh/devtoolset-8/root/usr/lib64:/opt/rh/devtoolset-8/root/usr/lib:/opt/rh/devtoolset-8/root/usr/lib64/dyninst:/opt/rh/devtoolset-8/root/usr/lib/dyninst:/opt/rh/devtoolset-8/root/usr/lib64:/opt/rh/devtoolset-8/root/usr/lib:$LD_LIBRARY_PATH
 
-RUN yum install -y wget git pcre-devel tcl-devel tk-devel bison flex \
+RUN yum install -y wget git pcre-devel tcl-devel tk-devel bison flex bzip2 \
                    python-devel libxml2-devel libxslt-devel zlib-static glibc-static
 
 RUN wget http://prdownloads.sourceforge.net/swig/swig-4.0.0.tar.gz && \
     tar -xf swig-4.0.0.tar.gz && \
     cd swig-4.0.0 && \
     ./configure && \
-    make && \
+    make -j$(nproc) && \
     make install
 
 # installing cmake for build dependency
@@ -29,7 +29,7 @@ RUN wget https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.
     tar -xf boost_1_68_0.tar.bz2 && \
     cd boost_1_68_0 && \
     ./bootstrap.sh && \
-    ./b2 install
+    ./b2 install --with-iostreams -j $(nproc)
 
 FROM base-dependencies AS builder
 
@@ -37,9 +37,9 @@ COPY . /TritonRoute
 RUN mkdir TritonRoute/build
 WORKDIR /TritonRoute/build
 RUN cmake ..
-RUN make
+RUN make -j$(nproc)
 
-FROM centos:centos6 AS runner
+FROM centos:centos7 AS runner
 RUN yum update -y && yum install -y tcl-devel
 COPY --from=builder /TritonRoute/build/TritonRoute /build/TritonRoute
 
