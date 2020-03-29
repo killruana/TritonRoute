@@ -29,6 +29,7 @@ prerequisites:
 * zlib >= 1.2.7
 * CMake >= 3.1
 
+
 To install TritonRoute:
 ```
 $ git clone https://github.com/The-OpenROAD-Project/TritonRoute.git
