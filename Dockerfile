@@ -29,7 +29,9 @@ RUN wget https://sourceforge.net/projects/boost/files/boost/1.72.0/boost_1_72_0.
     tar -xf download && \
     cd boost_1_72_0 && \
     ./bootstrap.sh && \
-    ./b2 install
+    ./b2 install --with-iostreams -j $(nproc)
+
+FROM base-dependencies AS builder
 
 COPY . /TritonRoute
 RUN mkdir TritonRoute/build
