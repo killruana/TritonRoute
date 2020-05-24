@@ -3622,7 +3622,7 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
         frCollection<frCoord> rowVals(1, 0), colVals(1, 0);
         frCollection<frCollection<frCoord> > tblVals(1, {minSpacing});
         frString rowName("WIDTH"), colName("PARALLELRUNLENGTH");
-        unique_ptr<frConstraint> uCon = make_unique<frSpacingTablePrlConstraint>(fr2DLookupTbl(rowName, rowVals, colName, colVals, tblVals));
+        unique_ptr<frConstraint> uCon = make_unique<frSpacingTablePrlConstraint>(fr2DLookupTbl<frCoord, frCoord, frCoord>(rowName, rowVals, colName, colVals, tblVals));
         auto rptr = static_cast<frSpacingTablePrlConstraint*>(uCon.get());
         ((io::Parser*)data)->tech->addUConstraint(uCon);
         if (tmpLayer->getMinSpacing()) {
@@ -3690,7 +3690,7 @@ int io::Parser::getLefLayers(lefrCallbackType_e type, lefiLayer* layer, lefiUser
         //}
 
         // new
-        unique_ptr<frConstraint> uCon = make_unique<frSpacingTablePrlConstraint>(fr2DLookupTbl(rowName, rowVals, colName, colVals, tblVals));
+        unique_ptr<frConstraint> uCon = make_unique<frSpacingTablePrlConstraint>(fr2DLookupTbl<frCoord, frCoord, frCoord>(rowName, rowVals, colName, colVals, tblVals));
         auto rptr = static_cast<frSpacingTablePrlConstraint*>(uCon.get());
         //cout <<"@test " <<rptr->find(0.47*2000, 0.47*2000) / 2000.0 <<endl;
         //cout <<"@test " <<rptr->find(0.47*2000, 0.48*2000) / 2000.0 <<endl;
