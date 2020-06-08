@@ -167,7 +167,7 @@ set (FLEXROUTE_HEADER
 # include directories 
 ############################################################
 include_directories(
-  ${Boost_INCLUDE_DIR}
+  ${Boost_INCLUDE_DIRS}
   ${DEFLIB_HOME}/def
   ${LEFLIB_HOME}/lef
 
